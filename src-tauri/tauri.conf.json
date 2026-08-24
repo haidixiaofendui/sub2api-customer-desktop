@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ChatGPT 账号切换器",
+  "version": "0.1.0",
+  "identifier": "com.sub2api.customer",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "ChatGPT 账号切换器", "width": 520, "height": 780, "minWidth": 420, "minHeight": 620, "resizable": true }],
+    "security": { "csp": "default-src 'self'; connect-src 'self' http: https:; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http: https: data:" }
+  },
+  "bundle": { "active": true, "targets": ["nsis"], "icon": ["icons/icon.ico"] }
+}
