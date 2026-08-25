@@ -12,11 +12,11 @@ npm run tauri dev
 
 不要用 `npm run dev` 直接做激活联调：它只启动浏览器页面，无法访问操作系统凭据库。桌面端联调请始终使用 `npm run tauri dev`。
 
-默认服务地址为 `http://localhost:8080`。交付时请通过 `VITE_SUB2API_URL` 配置 HTTPS 地址。
+开发联调固定使用 `http://8.136.139.105:8080`。正式打包必须通过 `VITE_SUB2API_URL` 配置 HTTPS 服务地址；原生层会拒绝 HTTP 地址。
 
 ```powershell
 $env:VITE_SUB2API_URL = "https://api.example.com"
 npm run tauri build
 ```
 
-设备 ID 保存到 App 私有存储；`access_token`、`refresh_token` 和 API Key 保存到操作系统凭据库，永不写入日志、普通配置文件或剪贴板。生产包会拒绝 HTTP 服务地址；请不要把测试 HTTP 地址用于正式环境。
+设备 ID 保存到 App 私有存储；`access_token`、`refresh_token` 和 API Key 保存到操作系统凭据库，永不写入日志、普通配置文件或剪贴板。
