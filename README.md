@@ -1,6 +1,6 @@
 # Sub2API Customer Desktop
 
-面向兑换码客户的 Tauri 2 + React 桌面端。它仅调用 `POST /api/v1/customer/activate` 完成设备激活；接口文档未定义的账号列表、额度、用量与通知功能均不展示。
+面向兑换码客户的 Tauri 2 + React 桌面端。当前服务端仅提供 `POST /api/v1/customer/activate`，用量、用量明细和通知界面暂不发起服务端请求。
 
 ## 开发
 
@@ -19,4 +19,4 @@ $env:VITE_SUB2API_URL = "https://api.example.com"
 npm run tauri build
 ```
 
-设备 ID 保存到 App 私有存储；`access_token`、`refresh_token` 和 API Key 保存到操作系统凭据库，永不写入日志、普通配置文件或剪贴板。
+设备 ID 保存到 App 私有存储；`access_token`、`refresh_token` 和 API Key 按账号保存到操作系统凭据库，永不写入日志、普通配置文件或剪贴板。删除账号时会同步删除对应的系统安全凭据。

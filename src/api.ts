@@ -1,13 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 
-type ActivationResult = {
-  success: boolean
-  status: number
-  code?: number
-  reason?: string
-  retryAfter?: number
-  expiresAt?: string
-}
+type ActivationResult = { success: boolean; status: number; code?: number; reason?: string; retryAfter?: number; expiresAt?: string }
 
 export class ApiError extends Error {
   constructor(message: string, readonly status?: number, readonly reason?: string, readonly retryAfter?: number, readonly code?: number) { super(message) }
@@ -29,12 +22,15 @@ const errorMessage = (status: number, reason?: string) => {
   return '服务器未能完成激活。'
 }
 
-export async function activate(baseUrl: string, code: string, deviceId: string) {
+export async function activate(baseUrl: string, code: string, deviceId: string, accountId: string) {
   const redemptionCode = code.trim()
   if (!redemptionCode || redemptionCode.length > 64) throw new ApiError('兑换码长度应为 1～64 个字符。')
   if (deviceId.trim().length < 16 || deviceId.trim().length > 256) throw new ApiError('设备标识无效，请重新安装应用后再试。')
-
-  const result = await invoke<ActivationResult>('activate_customer', { request: { baseUrl, code: redemptionCode, deviceId: deviceId.trim() } })
+  const result = await invoke<ActivationResult>('activate_customer', { request: { baseUrl, code: redemptionCode, deviceId: deviceId.trim(), accountId } })
   if (!result.success) throw new ApiError(errorMessage(result.status, result.reason), result.status, result.reason, result.retryAfter, result.code)
   return result
+}
+
+export async function deleteCustomerSession(accountId: string) {
+  await invoke('delete_customer_session', { request: { accountId } })
 }
