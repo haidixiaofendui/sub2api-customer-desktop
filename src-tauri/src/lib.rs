@@ -7,9 +7,19 @@ const CREDENTIAL_SERVICE: &str = "com.sub2api.customer";
 const CREDENTIAL_ACCOUNT: &str = "customer-session";
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 struct CustomerSession {
     base_url: String,
+    access_token: String,
+    refresh_token: Option<String>,
+    api_key: String,
+    expires_in: Option<u64>,
+    expires_at: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+struct ActivationCredentials {
     access_token: String,
     refresh_token: Option<String>,
     api_key: String,
@@ -29,7 +39,7 @@ struct ActivationRequest {
 struct ActivationEnvelope {
     code: Option<i64>,
     reason: Option<String>,
-    data: Option<CustomerSession>,
+    data: Option<ActivationCredentials>,
 }
 
 #[derive(Serialize)]
@@ -37,6 +47,7 @@ struct ActivationEnvelope {
 struct ActivationResult {
     success: bool,
     status: u16,
+    #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<i64>,
     reason: Option<String>,
     retry_after: Option<u64>,
@@ -110,12 +121,20 @@ async fn activate_customer(request: ActivationRequest) -> ActivationResult {
         };
     }
     let (status, retry_after, envelope) = response;
-    if status != 200 || envelope.code != Some(0) {
+    if status != 200 || envelope.code.is_some_and(|code| code != 0) {
         return ActivationResult::failure(status, envelope.code, envelope.reason.unwrap_or_else(|| "ACTIVATION_FAILED".to_string()), retry_after);
     }
-    let session = match envelope.data {
-        Some(session) if !session.access_token.is_empty() && !session.api_key.is_empty() => session,
+    let credentials = match envelope.data {
+        Some(credentials) if !credentials.access_token.is_empty() && !credentials.api_key.is_empty() => credentials,
         _ => return ActivationResult::failure(status, Some(0), "INVALID_RESPONSE", None),
+    };
+    let session = CustomerSession {
+        base_url: request.base_url,
+        access_token: credentials.access_token,
+        refresh_token: credentials.refresh_token,
+        api_key: credentials.api_key,
+        expires_in: credentials.expires_in,
+        expires_at: credentials.expires_at,
     };
     let expires_at = session.expires_at.clone();
     if save_customer_session(&session).is_err() {
@@ -131,6 +150,21 @@ fn has_customer_session() -> Result<bool, String> {
         Err(_) => return Ok(false),
     };
     Ok(serde_json::from_str::<CustomerSession>(&value).is_ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ActivationEnvelope;
+
+    #[test]
+    fn parses_snake_case_activation_credentials() {
+        let response = r#"{"code":0,"data":{"access_token":"access","refresh_token":"refresh","api_key":"key","expires_in":86400,"expires_at":"2026-09-24T10:00:00+08:00"}}"#;
+        let envelope: ActivationEnvelope = serde_json::from_str(response).unwrap();
+        assert_eq!(envelope.code, Some(0));
+        let session = envelope.data.unwrap();
+        assert_eq!(session.access_token, "access");
+        assert_eq!(session.api_key, "key");
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

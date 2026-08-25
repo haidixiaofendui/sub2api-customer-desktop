@@ -74,10 +74,59 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .form-success { display: flex; align-items: center; gap: 8px; margin: 22px 0 0; padding: 10px 11px; border-radius: 10px; color: #356647; background: #dcecdf; font-size: 12px; line-height: 1.5; }
 .loading-panel { align-items: center; color: var(--accent); }
 .server { margin: 26px 0 0; overflow-wrap: anywhere; color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: 10px; }
+.open-workspace { min-height: 48px; margin-top: 12px; border: 1px solid var(--ink); border-radius: 13px; color: var(--ink); background: transparent; font-size: 13px; font-weight: 800; }
+.open-workspace span { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 6px; border-radius: 10px; color: var(--paper); background: var(--accent); font-size: 10px; }
+.open-workspace:hover { color: var(--paper); background: var(--ink); }
+
+.workspace { width: min(100%, 560px); min-height: 100dvh; margin: auto; padding: 22px 28px 50px; border-right: 1px solid #cec8bb; border-left: 1px solid #cec8bb; background: var(--paper-deep); }
+.app-header { min-height: 48px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 12px 14px; border: 1px solid #d2ccbf; border-radius: 16px; background: var(--surface); }
+.header-actions { display: flex; gap: 7px; }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border: 1px solid var(--ink); border-radius: 11px; color: var(--ink); background: transparent; }
+.icon-button:hover { color: var(--paper); background: var(--ink); }
+.notification-button { position: relative; }
+.notification-button i { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 10px; color: white; background: var(--accent); font-size: 9px; font-style: normal; font-weight: 800; }
+.notification-panel, .usage-summary, .config-section, .usage-disclosure, .network-details { border: 1px solid #d2ccbf; border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px #423d3312; }
+.notification-panel { margin-bottom: 14px; padding: 0 14px 8px; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 11px; }
+.panel-heading strong { font-size: 13px; }
+.panel-heading button { border: 0; color: var(--accent); background: transparent; font-size: 11px; font-weight: 800; }
+.notification-panel article { padding: 12px 0; border-top: 1px solid var(--rule); }
+.notification-panel article.is-unread { padding-left: 10px; border-left: 3px solid var(--accent); border-radius: 3px; }
+.notification-panel article div { display: flex; justify-content: space-between; gap: 12px; }
+.notification-panel article strong { font-size: 12px; }
+.notification-panel article time, .usage-row time { color: var(--muted); font-size: 10px; }
+.notification-panel article p { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+.account-switcher { display: flex; gap: 8px; padding: 0 0 16px; overflow-x: auto; }
+.account-switcher button { flex: 0 0 auto; display: grid; gap: 3px; min-width: 98px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; color: var(--muted); background: var(--surface); text-align: left; }
+.account-switcher button.is-active { border-color: var(--ink); color: var(--paper); background: var(--ink); }
+.account-switcher span { font-size: 11px; font-weight: 800; }
+.account-switcher code, .config-row code { overflow: hidden; font-family: "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.account-switcher code { font-size: 9px; }
+.usage-summary { padding: 24px 22px 20px; }
+.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.section-label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.usage-summary h1 { margin: 7px 0 0; font-family: "Bahnschrift Condensed", "Arial Narrow", sans-serif; font-size: 46px; line-height: 1; letter-spacing: -.04em; }
+.usage-meter { height: 9px; margin-top: 22px; overflow: hidden; border-radius: 5px; background: var(--paper-deep); }
+.usage-meter i { display: block; height: 100%; border-radius: inherit; }
+.usage-meter.is-healthy i { background: #3e8a5b; }.usage-meter.is-medium i { background: #d49a20; }.usage-meter.is-low i { background: var(--accent); }
+.usage-meta { display: flex; justify-content: space-between; margin-top: 9px; color: var(--muted); font-size: 10px; }
+.config-section { margin-top: 14px; padding: 20px 20px 8px; }
+.config-section .section-heading { align-items: center; margin-bottom: 16px; }
+.config-section h2 { margin: 0; font-size: 17px; }
+.config-actions { display: flex; align-items: center; gap: 8px; }
+.status { padding: 4px 8px; border: 1px solid var(--rule); border-radius: 9px; color: var(--muted); font-size: 10px; font-weight: 800; }.status.is-ok { border-color: #548265; color: #356647; }
+.delete-button { display: inline-flex; align-items: center; gap: 4px; min-height: 27px; padding: 0 8px; border: 1px solid #b95a52; border-radius: 9px; color: #9f2b23; background: transparent; font-size: 10px; font-weight: 800; }.delete-button:hover { color: white; background: #9f2b23; }
+.config-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; min-height: 48px; border-top: 1px solid var(--rule); }.config-row > span { color: var(--muted); font-size: 10px; }.config-row code { font-size: 10px; }
+.account-facts { margin: 0; padding: 0 0 18px; border-top: 1px solid var(--rule); }.account-facts div { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: baseline; min-height: 48px; padding: 14px 0 10px; gap: 18px; border-bottom: 1px solid var(--rule); }.account-facts dt { color: var(--muted); font-size: 11px; letter-spacing: .04em; }.account-facts dd { margin: 0; overflow: hidden; font-family: "Bahnschrift", "Microsoft YaHei UI", sans-serif; font-size: 14px; font-weight: 700; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.usage-disclosure { margin-top: 14px; overflow: hidden; }.usage-toggle { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 13px; padding: 15px 16px; border: 0; color: var(--ink); background: transparent; text-align: left; }.usage-toggle-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--paper); background: var(--accent); }.usage-toggle strong { font-size: 13px; letter-spacing: .02em; }.chevron { color: var(--accent); transition: transform .18s ease; }.usage-disclosure.is-open .chevron { transform: rotate(180deg); }.usage-content { padding: 0 16px 15px; border-top: 1px solid var(--rule); }.usage-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 15px 0; border-bottom: 1px solid var(--rule); }.usage-row:last-child { border-bottom: 0; }.usage-row strong { display: block; font-size: 12px; }.usage-row > span { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: 10px; line-height: 1.6; text-align: right; }
+.empty { padding: 30px 10px 14px; color: var(--muted); font-size: 12px; text-align: center; }
+.network-details { margin-top: 14px; overflow: hidden; }.network-details summary { display: flex; align-items: center; justify-content: space-between; padding: 16px; cursor: pointer; list-style: none; }.network-details summary::-webkit-details-marker { display: none; }.network-details summary span { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 800; }.network-details summary span svg { color: var(--accent); }.network-details[open] summary > svg { transform: rotate(180deg); }.network-details dl { margin: 0; padding: 0 16px 12px; border-top: 1px solid var(--rule); }.network-details dl div { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--rule); }.network-details dl div:last-child { border-bottom: 0; }.network-details dt { color: var(--muted); font-size: 10px; }.network-details dd { margin: 0; font-family: "Cascadia Code", Consolas, monospace; font-size: 11px; }
 
 @media (max-width: 480px) {
   .activation-shell { padding: 0; place-items: stretch; }
   .activation-panel { min-height: 100dvh; padding: 24px 20px; border: 0; border-radius: 0; box-shadow: none; }
+  .workspace { padding: 18px 20px 42px; border: 0; }
+  .account-facts div { grid-template-columns: 105px minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {
