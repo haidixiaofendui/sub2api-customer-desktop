@@ -1,14 +1,16 @@
 # Sub2API Customer Desktop
 
-面向兑换码客户的 Tauri 2 + React 桌面端。它调用 `POST /api/v1/customer/activate` 完成设备激活，再读取当前用户自己的 API Key 与用量。
+面向兑换码客户的 Tauri 2 + React 桌面端。它仅调用 `POST /api/v1/customer/activate` 完成设备激活；接口文档未定义的账号列表、额度、用量与通知功能均不展示。
 
 ## 开发
 
 ```powershell
-cd customer-tauri
+cd D:\data\project\sub2api-customer-desktop
 npm install
 npm run tauri dev
 ```
+
+不要用 `npm run dev` 直接做激活联调：它只启动浏览器页面，无法访问操作系统凭据库。桌面端联调请始终使用 `npm run tauri dev`。
 
 默认服务地址为 `http://localhost:8080`。交付时请通过 `VITE_SUB2API_URL` 配置 HTTPS 地址。
 
@@ -17,15 +19,4 @@ $env:VITE_SUB2API_URL = "https://api.example.com"
 npm run tauri build
 ```
 
-仅保存非敏感的设备标识。JWT 和 API Key 只驻留在内存中，重启应用后需再次输入兑换码以恢复会话。请不要把测试 HTTP 地址用于正式环境。
-
-## 演示模式
-
-演示入口默认不包含在生产包中。需要测试时使用以下命令构建：
-
-```powershell
-$env:VITE_DEMO_MODE = "true"
-npm run tauri build
-```
-
-这会显示“填入演示数据”按钮；使用 `DEMO-2026-START` 激活即可查看完整界面。演示模式完全离线，展示的密钥和用量均不可用。
+设备 ID 保存到 App 私有存储；`access_token`、`refresh_token` 和 API Key 保存到操作系统凭据库，永不写入日志、普通配置文件或剪贴板。生产包会拒绝 HTTP 服务地址；请不要把测试 HTTP 地址用于正式环境。
