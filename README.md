@@ -1,6 +1,6 @@
 # Sub2API Customer Desktop
 
-面向兑换码客户的 Tauri 2 + React 桌面端。当前服务端仅提供 `POST /api/v1/customer/activate`，用量、用量明细和通知界面暂不发起服务端请求。
+面向兑换码客户的 Tauri 2 + React 桌面端。激活使用 `POST /api/v1/customer/activate`；用量、用量明细、通知及通知已读接口使用激活返回的 Access Token 进行 Bearer 鉴权。
 
 ## 开发
 
@@ -20,3 +20,7 @@ npm run tauri build
 ```
 
 设备 ID 保存到 App 私有存储；`access_token`、`refresh_token` 和 API Key 按账号保存到操作系统凭据库，永不写入日志、普通配置文件或剪贴板。删除账号时会同步删除对应的系统安全凭据。
+
+重复添加时，客户端使用浏览器原生 SHA-256 保存设备相关的卡密指纹，并由原生层在内存中再次比较新旧 Access Token/API Key；两层任一判断为同一账号都会拒绝新增，不会保存或返回原始卡密。
+
+当前已接入：`POST /api/usage`、`POST /api/usage/details`、`GET /api/notifications`、`POST /api/notifications/read`。服务器尚未提供可用的 `/api/usage/reset` 与 Relay API，客户端不会调用这两个路径。

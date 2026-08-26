@@ -9,6 +9,7 @@ export type UsageDetail = {
 
 export type Account = {
   id: string
+  activationId?: string
   name: string
   plan: string
   status: '可用' | '受限'
