@@ -8,6 +8,19 @@ type NotificationsResult = ServiceResult & { items?: RemoteNotification[] }
 
 export type RemoteUsageDetail = { id: string; model: string; createdAt?: string; inputTokens: number; outputTokens: number }
 export type RemoteNotification = { id: string; title: string; content: string; time?: string; read: boolean }
+export type CodexConfigStatus = {
+  healthy: boolean
+  configured: boolean
+  currentAccountId?: string
+  provider?: string
+  model?: string
+  relayUrl?: string
+  backupAvailable: boolean
+  repairedSessions: number
+  restartRequired: boolean
+  issues: string[]
+  warnings: string[]
+}
 
 export class ApiError extends Error {
   constructor(message: string, readonly status?: number, readonly reason?: string, readonly retryAfter?: number, readonly code?: number) { super(message) }
@@ -66,3 +79,31 @@ export async function getNotifications(accountId: string) {
 export async function markNotificationsRead(accountId: string, notificationIds: string[]) {
   ensureService(await invoke<ServiceResult>('mark_notifications_read', { request: { accountId, notificationIds } }))
 }
+
+const codexErrorMessage = (reason: unknown) => {
+  const value = String(reason)
+  if (value.includes('CODEX_HOME_UNAVAILABLE')) return '无法确定 Codex 配置目录。'
+  if (value.includes('CODEX_PERMISSION_DENIED')) return 'Codex 配置目录不可写，请检查文件权限。'
+  if (value.includes('CODEX_AUTH_INVALID')) return 'Codex auth.json 已损坏或格式无效。'
+  if (value.includes('CODEX_CONFIG_INVALID')) return 'Codex 配置无效，未完成修改。'
+  if (value.includes('CODEX_STATE_DB_BUSY')) return 'Codex 历史任务数据库正在使用，请关闭 Codex 后重试。'
+  if (value.includes('CODEX_STATE_DB_INVALID')) return 'Codex 历史任务数据库不可用，未完成修改。'
+  if (value.includes('CODEX_BACKUP_NOT_FOUND')) return '没有可用的官方配置备份。'
+  if (value.includes('CODEX_BACKUP_INVALID')) return '官方配置备份缺失或已损坏。'
+  if (value.includes('CODEX_RELAY_URL_INVALID')) return '无法从服务地址生成 Codex 转发地址。'
+  if (value.includes('CODEX_ROLLBACK_FAILED')) return '配置操作及自动回滚均失败，请勿启动 Codex，并联系技术支持。'
+  if (value.includes('CODEX_WRITE_FAILED')) return '无法安全写入 Codex 配置。'
+  return 'Codex 配置操作失败，原配置未更改。'
+}
+
+const codexCommand = async (command: string, request?: { accountId?: string }) => {
+  try {
+    return await invoke<CodexConfigStatus>(command, request ? { request } : undefined)
+  } catch (reason) {
+    throw new ApiError(codexErrorMessage(reason))
+  }
+}
+
+export const applyCodexConfig = (accountId: string) => codexCommand('apply_codex_config', { accountId })
+export const restoreOfficialCodexConfig = () => codexCommand('restore_official_codex_config')
+export const diagnoseCodexConfig = (accountId?: string) => codexCommand('diagnose_codex_config', { accountId })

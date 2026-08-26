@@ -1,3 +1,5 @@
+mod codex_config;
+
 use keyring::Entry;
 use reqwest::{Client, Url};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -39,11 +41,22 @@ struct ActivationRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AccountRequest { account_id: String }
+struct AccountRequest {
+    account_id: String,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ReadNotificationsRequest { account_id: String, notification_ids: Vec<String> }
+struct OptionalAccountRequest {
+    account_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadNotificationsRequest {
+    account_id: String,
+    notification_ids: Vec<String>,
+}
 
 #[derive(Deserialize)]
 struct ActivationEnvelope {
@@ -66,33 +79,69 @@ struct ActivationResult {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct UsageData { quota: Option<f64>, quota_used: Option<f64>, refresh_count: Option<u64> }
+struct UsageData {
+    quota: Option<f64>,
+    quota_used: Option<f64>,
+    refresh_count: Option<u64>,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct UsageSnapshot { quota: f64, used: f64, requests: u64 }
+struct UsageSnapshot {
+    quota: f64,
+    used: f64,
+    requests: u64,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct RawUsageDetail { id: Value, model: String, created_at: Option<String>, input_tokens: Option<f64>, output_tokens: Option<f64> }
+struct RawUsageDetail {
+    id: Value,
+    model: String,
+    created_at: Option<String>,
+    input_tokens: Option<f64>,
+    output_tokens: Option<f64>,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct UsageDetail { id: String, model: String, created_at: Option<String>, input_tokens: f64, output_tokens: f64 }
+struct UsageDetail {
+    id: String,
+    model: String,
+    created_at: Option<String>,
+    input_tokens: f64,
+    output_tokens: f64,
+}
 
 #[derive(Deserialize)]
-struct UsageDetailsData { items: Vec<RawUsageDetail> }
+struct UsageDetailsData {
+    items: Vec<RawUsageDetail>,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct RawNotification { id: Value, title: Option<String>, content: Option<String>, created_at: Option<String>, read: Option<bool> }
+struct RawNotification {
+    id: Value,
+    title: Option<String>,
+    content: Option<String>,
+    created_at: Option<String>,
+    read: Option<bool>,
+}
 
 #[derive(Deserialize)]
-struct NotificationsData { items: Vec<RawNotification> }
+struct NotificationsData {
+    items: Vec<RawNotification>,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NotificationItem { id: String, title: String, content: String, time: Option<String>, read: bool }
+struct NotificationItem {
+    id: String,
+    title: String,
+    content: String,
+    time: Option<String>,
+    read: bool,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,63 +155,130 @@ struct ServiceResult {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct UsageResult { #[serde(flatten)] service: ServiceResult, usage: Option<UsageSnapshot> }
+struct UsageResult {
+    #[serde(flatten)]
+    service: ServiceResult,
+    usage: Option<UsageSnapshot>,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct UsageDetailsResult { #[serde(flatten)] service: ServiceResult, items: Option<Vec<UsageDetail>> }
+struct UsageDetailsResult {
+    #[serde(flatten)]
+    service: ServiceResult,
+    items: Option<Vec<UsageDetail>>,
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct NotificationsResult { #[serde(flatten)] service: ServiceResult, items: Option<Vec<NotificationItem>> }
+struct NotificationsResult {
+    #[serde(flatten)]
+    service: ServiceResult,
+    items: Option<Vec<NotificationItem>>,
+}
 
 impl ActivationResult {
-    fn failure(status: u16, code: Option<i64>, reason: impl Into<String>, retry_after: Option<u64>) -> Self {
-        Self { success: false, status, code, reason: Some(reason.into()), retry_after, expires_at: None }
+    fn failure(
+        status: u16,
+        code: Option<i64>,
+        reason: impl Into<String>,
+        retry_after: Option<u64>,
+    ) -> Self {
+        Self {
+            success: false,
+            status,
+            code,
+            reason: Some(reason.into()),
+            retry_after,
+            expires_at: None,
+        }
     }
 }
 
 impl ServiceResult {
-    fn success(status: u16, code: Option<i64>) -> Self { Self { success: true, status, code, reason: None } }
-    fn failure(status: u16, code: Option<i64>, reason: impl Into<String>) -> Self { Self { success: false, status, code, reason: Some(reason.into()) } }
+    fn success(status: u16, code: Option<i64>) -> Self {
+        Self {
+            success: true,
+            status,
+            code,
+            reason: None,
+        }
+    }
+    fn failure(status: u16, code: Option<i64>, reason: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            status,
+            code,
+            reason: Some(reason.into()),
+        }
+    }
 }
 
 fn valid_account_id(account_id: &str) -> bool {
-    !account_id.is_empty() && account_id.len() <= 64 && account_id.chars().all(|character| character.is_ascii_alphanumeric() || character == '-')
+    !account_id.is_empty()
+        && account_id.len() <= 64
+        && account_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
 }
 
 fn credential_entry(account_id: &str) -> Result<Entry, String> {
-    if !valid_account_id(account_id) { return Err("本地账号标识无效。".to_string()); }
-    Entry::new(CREDENTIAL_SERVICE, &format!("customer-session:{account_id}"))
-        .map_err(|_| "无法访问系统安全凭据库。".to_string())
+    if !valid_account_id(account_id) {
+        return Err("本地账号标识无效。".to_string());
+    }
+    Entry::new(
+        CREDENTIAL_SERVICE,
+        &format!("customer-session:{account_id}"),
+    )
+    .map_err(|_| "无法访问系统安全凭据库。".to_string())
 }
 
 fn save_customer_session(account_id: &str, session: &CustomerSession) -> Result<(), String> {
-    if session.base_url.trim().is_empty() || session.access_token.trim().is_empty() || session.api_key.trim().is_empty() {
+    if session.base_url.trim().is_empty()
+        || session.access_token.trim().is_empty()
+        || session.api_key.trim().is_empty()
+    {
         return Err("激活响应缺少必要凭据。".to_string());
     }
     let value = serde_json::to_string(session).map_err(|_| "无法准备安全凭据。".to_string())?;
-    credential_entry(account_id)?.set_password(&value).map_err(|_| "无法保存到系统安全凭据库。".to_string())
+    credential_entry(account_id)?
+        .set_password(&value)
+        .map_err(|_| "无法保存到系统安全凭据库。".to_string())
 }
 
 fn customer_session(account_id: &str) -> Result<CustomerSession, String> {
-    let value = credential_entry(account_id)?.get_password().map_err(|_| "找不到该账号的安全凭据，请重新添加账号。".to_string())?;
+    let value = credential_entry(account_id)?
+        .get_password()
+        .map_err(|_| "找不到该账号的安全凭据，请重新添加账号。".to_string())?;
     serde_json::from_str(&value).map_err(|_| "该账号的安全凭据已损坏，请重新添加账号。".to_string())
 }
 
 fn activation_url(base_url: &str) -> Result<Url, ()> {
     let url = Url::parse(base_url.trim()).map_err(|_| ())?;
-    if url.host().is_none() || !matches!(url.scheme(), "http" | "https") || (!cfg!(debug_assertions) && url.scheme() != "https") { return Err(()); }
+    if url.host().is_none()
+        || !matches!(url.scheme(), "http" | "https")
+    {
+        return Err(());
+    }
     url.join("api/v1/customer/activate").map_err(|_| ())
 }
 
 fn endpoint_url(base_url: &str, path: &str) -> Result<Url, ()> {
     let url = Url::parse(base_url.trim()).map_err(|_| ())?;
-    if url.host().is_none() || !matches!(url.scheme(), "http" | "https") || (!cfg!(debug_assertions) && url.scheme() != "https") { return Err(()); }
+    if url.host().is_none()
+        || !matches!(url.scheme(), "http" | "https")
+    {
+        return Err(());
+    }
     url.join(path).map_err(|_| ())
 }
 
-fn http_client() -> Result<Client, ()> { Client::builder().timeout(Duration::from_secs(15)).build().map_err(|_| ()) }
+fn http_client() -> Result<Client, ()> {
+    Client::builder()
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|_| ())
+}
 
 async fn send(request: reqwest::RequestBuilder) -> Result<(u16, String), ()> {
     let response = request.send().await.map_err(|_| ())?;
@@ -170,129 +286,474 @@ async fn send(request: reqwest::RequestBuilder) -> Result<(u16, String), ()> {
     Ok((status, response.text().await.map_err(|_| ())?))
 }
 
-fn parse_response<T: DeserializeOwned>(body: &str) -> (Option<i64>, Option<String>, Option<T>, bool) {
-    let value: Value = match serde_json::from_str(body) { Ok(value) => value, Err(_) => return (None, Some("INVALID_RESPONSE".to_string()), None, false) };
+fn parse_response<T: DeserializeOwned>(
+    body: &str,
+) -> (Option<i64>, Option<String>, Option<T>, bool) {
+    let value: Value = match serde_json::from_str(body) {
+        Ok(value) => value,
+        Err(_) => return (None, Some("INVALID_RESPONSE".to_string()), None, false),
+    };
     let code = value.get("code").and_then(Value::as_i64);
     let text_code = value.get("code").and_then(Value::as_str);
-    let reason = value.get("reason").and_then(Value::as_str).or(text_code).or_else(|| value.get("message").and_then(Value::as_str)).map(ToOwned::to_owned);
-    let business_ok = code.is_none_or(|value| value == 0 || value == 200) && text_code.is_none_or(|value| matches!(value, "OK" | "SUCCESS"));
+    let reason = value
+        .get("reason")
+        .and_then(Value::as_str)
+        .or(text_code)
+        .or_else(|| value.get("message").and_then(Value::as_str))
+        .map(ToOwned::to_owned);
+    let business_ok = code.is_none_or(|value| value == 0 || value == 200)
+        && text_code.is_none_or(|value| matches!(value, "OK" | "SUCCESS"));
     let payload = value.get("data").cloned().unwrap_or(value);
-    (code, reason, serde_json::from_value(payload).ok(), business_ok)
+    (
+        code,
+        reason,
+        serde_json::from_value(payload).ok(),
+        business_ok,
+    )
 }
 
-fn failure_reason(reason: Option<String>) -> String { reason.unwrap_or_else(|| "REQUEST_FAILED".to_string()) }
+fn failure_reason(reason: Option<String>) -> String {
+    reason.unwrap_or_else(|| "REQUEST_FAILED".to_string())
+}
 
 fn value_id(value: Value) -> Option<String> {
-    match value { Value::String(id) if !id.is_empty() => Some(id), Value::Number(id) => Some(id.to_string()), _ => None }
+    match value {
+        Value::String(id) if !id.is_empty() => Some(id),
+        Value::Number(id) => Some(id.to_string()),
+        _ => None,
+    }
 }
 
 fn same_account(session: &CustomerSession, credentials: &ActivationCredentials) -> bool {
     session.access_token == credentials.access_token || session.api_key == credentials.api_key
 }
 
-async fn send_activation(client: &Client, url: &Url, request: &ActivationRequest) -> Result<(u16, Option<u64>, ActivationEnvelope), ()> {
-    let response = client.post(url.clone()).json(&serde_json::json!({ "code": request.code, "device_id": request.device_id })).send().await.map_err(|_| ())?;
+async fn send_activation(
+    client: &Client,
+    url: &Url,
+    request: &ActivationRequest,
+) -> Result<(u16, Option<u64>, ActivationEnvelope), ()> {
+    let response = client
+        .post(url.clone())
+        .json(&serde_json::json!({ "code": request.code, "device_id": request.device_id }))
+        .send()
+        .await
+        .map_err(|_| ())?;
     let status = response.status().as_u16();
-    let retry_after = response.headers().get(reqwest::header::RETRY_AFTER).and_then(|value| value.to_str().ok()).and_then(|value| value.parse::<u64>().ok()).filter(|value| *value > 0);
-    let body = response.json::<ActivationEnvelope>().await.unwrap_or(ActivationEnvelope { code: None, reason: None, data: None });
+    let retry_after = response
+        .headers()
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0);
+    let body = response
+        .json::<ActivationEnvelope>()
+        .await
+        .unwrap_or(ActivationEnvelope {
+            code: None,
+            reason: None,
+            data: None,
+        });
     Ok((status, retry_after, body))
 }
 
 #[tauri::command]
 async fn activate_customer(request: ActivationRequest) -> ActivationResult {
-    if request.code.trim().is_empty() || request.code.trim().len() > 64 || !(16..=256).contains(&request.device_id.trim().len()) || !valid_account_id(&request.account_id) || request.existing_account_ids.len() > 100 || !request.existing_account_ids.iter().all(|id| valid_account_id(id)) {
+    if request.code.trim().is_empty()
+        || request.code.trim().len() > 64
+        || !(16..=256).contains(&request.device_id.trim().len())
+        || !valid_account_id(&request.account_id)
+        || request.existing_account_ids.len() > 100
+        || !request
+            .existing_account_ids
+            .iter()
+            .all(|id| valid_account_id(id))
+    {
         return ActivationResult::failure(400, Some(400), "INVALID_REQUEST", None);
     }
-    let url = match activation_url(&request.base_url) { Ok(url) => url, Err(()) => return ActivationResult::failure(0, None, "CONFIG_ERROR", None) };
-    let client = match Client::builder().timeout(Duration::from_secs(15)).build() { Ok(client) => client, Err(_) => return ActivationResult::failure(0, None, "NETWORK_ERROR", None) };
-    let mut response = match send_activation(&client, &url, &request).await { Ok(response) => response, Err(()) => return ActivationResult::failure(0, None, "NETWORK_ERROR", None) };
+    let url = match activation_url(&request.base_url) {
+        Ok(url) => url,
+        Err(()) => return ActivationResult::failure(0, None, "CONFIG_ERROR", None),
+    };
+    let client = match Client::builder().timeout(Duration::from_secs(15)).build() {
+        Ok(client) => client,
+        Err(_) => return ActivationResult::failure(0, None, "NETWORK_ERROR", None),
+    };
+    let mut response = match send_activation(&client, &url, &request).await {
+        Ok(response) => response,
+        Err(()) => return ActivationResult::failure(0, None, "NETWORK_ERROR", None),
+    };
     if response.0 == 409 && response.2.reason.as_deref() == Some("REDEEM_CODE_LOCKED") {
         tokio::time::sleep(Duration::from_millis(800)).await;
-        response = match send_activation(&client, &url, &request).await { Ok(response) => response, Err(()) => return ActivationResult::failure(0, None, "NETWORK_ERROR", None) };
+        response = match send_activation(&client, &url, &request).await {
+            Ok(response) => response,
+            Err(()) => return ActivationResult::failure(0, None, "NETWORK_ERROR", None),
+        };
     }
     let (status, retry_after, envelope) = response;
     if status != 200 || envelope.code.is_some_and(|code| code != 0) {
-        return ActivationResult::failure(status, envelope.code, envelope.reason.unwrap_or_else(|| "ACTIVATION_FAILED".to_string()), retry_after);
+        return ActivationResult::failure(
+            status,
+            envelope.code,
+            envelope
+                .reason
+                .unwrap_or_else(|| "ACTIVATION_FAILED".to_string()),
+            retry_after,
+        );
     }
-    let credentials = match envelope.data { Some(credentials) if !credentials.access_token.is_empty() && !credentials.api_key.is_empty() => credentials, _ => return ActivationResult::failure(status, Some(0), "INVALID_RESPONSE", None) };
-    let already_added = request.existing_account_ids.iter().any(|account_id| customer_session(account_id).is_ok_and(|session| same_account(&session, &credentials)));
-    if already_added { return ActivationResult::failure(409, Some(409), "ACCOUNT_ALREADY_ADDED", None); }
-    let session = CustomerSession { base_url: request.base_url, access_token: credentials.access_token, refresh_token: credentials.refresh_token, api_key: credentials.api_key, expires_in: credentials.expires_in, expires_at: credentials.expires_at };
+    let credentials = match envelope.data {
+        Some(credentials)
+            if !credentials.access_token.is_empty() && !credentials.api_key.is_empty() =>
+        {
+            credentials
+        }
+        _ => return ActivationResult::failure(status, Some(0), "INVALID_RESPONSE", None),
+    };
+    let already_added = request.existing_account_ids.iter().any(|account_id| {
+        customer_session(account_id).is_ok_and(|session| same_account(&session, &credentials))
+    });
+    if already_added {
+        return ActivationResult::failure(409, Some(409), "ACCOUNT_ALREADY_ADDED", None);
+    }
+    let session = CustomerSession {
+        base_url: request.base_url,
+        access_token: credentials.access_token,
+        refresh_token: credentials.refresh_token,
+        api_key: credentials.api_key,
+        expires_in: credentials.expires_in,
+        expires_at: credentials.expires_at,
+    };
     let expires_at = session.expires_at.clone();
-    if save_customer_session(&request.account_id, &session).is_err() { return ActivationResult::failure(status, Some(0), "SECURE_STORAGE_FAILED", None); }
-    ActivationResult { success: true, status, code: Some(0), reason: None, retry_after: None, expires_at }
+    if save_customer_session(&request.account_id, &session).is_err() {
+        return ActivationResult::failure(status, Some(0), "SECURE_STORAGE_FAILED", None);
+    }
+    ActivationResult {
+        success: true,
+        status,
+        code: Some(0),
+        reason: None,
+        retry_after: None,
+        expires_at,
+    }
 }
 
 #[tauri::command]
 async fn get_usage(request: AccountRequest) -> UsageResult {
-    let session = match customer_session(&request.account_id) { Ok(session) => session, Err(reason) => return UsageResult { service: ServiceResult::failure(0, None, reason), usage: None } };
-    let url = match endpoint_url(&session.base_url, "api/usage") { Ok(url) => url, Err(()) => return UsageResult { service: ServiceResult::failure(0, None, "CONFIG_ERROR"), usage: None } };
-    let client = match http_client() { Ok(client) => client, Err(()) => return UsageResult { service: ServiceResult::failure(0, None, "NETWORK_ERROR"), usage: None } };
-    let (status, body) = match send(client.post(url).bearer_auth(&session.access_token).json(&serde_json::json!({}))).await { Ok(response) => response, Err(()) => return UsageResult { service: ServiceResult::failure(0, None, "NETWORK_ERROR"), usage: None } };
+    let session = match customer_session(&request.account_id) {
+        Ok(session) => session,
+        Err(reason) => {
+            return UsageResult {
+                service: ServiceResult::failure(0, None, reason),
+                usage: None,
+            }
+        }
+    };
+    let url = match endpoint_url(&session.base_url, "api/usage") {
+        Ok(url) => url,
+        Err(()) => {
+            return UsageResult {
+                service: ServiceResult::failure(0, None, "CONFIG_ERROR"),
+                usage: None,
+            }
+        }
+    };
+    let client = match http_client() {
+        Ok(client) => client,
+        Err(()) => {
+            return UsageResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                usage: None,
+            }
+        }
+    };
+    let (status, body) = match send(
+        client
+            .post(url)
+            .bearer_auth(&session.access_token)
+            .json(&serde_json::json!({})),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(()) => {
+            return UsageResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                usage: None,
+            }
+        }
+    };
     let (code, reason, data, business_ok) = parse_response::<UsageData>(&body);
-    if !(200..300).contains(&status) || !business_ok { return UsageResult { service: ServiceResult::failure(status, code, failure_reason(reason)), usage: None }; }
+    if !(200..300).contains(&status) || !business_ok {
+        return UsageResult {
+            service: ServiceResult::failure(status, code, failure_reason(reason)),
+            usage: None,
+        };
+    }
     match data {
-        Some(data) => UsageResult { service: ServiceResult::success(status, code), usage: Some(UsageSnapshot { quota: data.quota.unwrap_or(0.0), used: data.quota_used.unwrap_or(0.0), requests: data.refresh_count.unwrap_or(0) }) },
-        None => UsageResult { service: ServiceResult::failure(status, code, "INVALID_RESPONSE"), usage: None },
+        Some(data) => UsageResult {
+            service: ServiceResult::success(status, code),
+            usage: Some(UsageSnapshot {
+                quota: data.quota.unwrap_or(0.0),
+                used: data.quota_used.unwrap_or(0.0),
+                requests: data.refresh_count.unwrap_or(0),
+            }),
+        },
+        None => UsageResult {
+            service: ServiceResult::failure(status, code, "INVALID_RESPONSE"),
+            usage: None,
+        },
     }
 }
 
 #[tauri::command]
 async fn get_usage_details(request: AccountRequest) -> UsageDetailsResult {
-    let session = match customer_session(&request.account_id) { Ok(session) => session, Err(reason) => return UsageDetailsResult { service: ServiceResult::failure(0, None, reason), items: None } };
-    let url = match endpoint_url(&session.base_url, "api/usage/details") { Ok(url) => url, Err(()) => return UsageDetailsResult { service: ServiceResult::failure(0, None, "CONFIG_ERROR"), items: None } };
-    let client = match http_client() { Ok(client) => client, Err(()) => return UsageDetailsResult { service: ServiceResult::failure(0, None, "NETWORK_ERROR"), items: None } };
-    let (status, body) = match send(client.post(url).bearer_auth(&session.access_token).json(&serde_json::json!({ "before_id": 0 }))).await { Ok(response) => response, Err(()) => return UsageDetailsResult { service: ServiceResult::failure(0, None, "NETWORK_ERROR"), items: None } };
+    let session = match customer_session(&request.account_id) {
+        Ok(session) => session,
+        Err(reason) => {
+            return UsageDetailsResult {
+                service: ServiceResult::failure(0, None, reason),
+                items: None,
+            }
+        }
+    };
+    let url = match endpoint_url(&session.base_url, "api/usage/details") {
+        Ok(url) => url,
+        Err(()) => {
+            return UsageDetailsResult {
+                service: ServiceResult::failure(0, None, "CONFIG_ERROR"),
+                items: None,
+            }
+        }
+    };
+    let client = match http_client() {
+        Ok(client) => client,
+        Err(()) => {
+            return UsageDetailsResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                items: None,
+            }
+        }
+    };
+    let (status, body) = match send(
+        client
+            .post(url)
+            .bearer_auth(&session.access_token)
+            .json(&serde_json::json!({ "before_id": 0 })),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(()) => {
+            return UsageDetailsResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                items: None,
+            }
+        }
+    };
     let (code, reason, data, business_ok) = parse_response::<UsageDetailsData>(&body);
-    if !(200..300).contains(&status) || !business_ok { return UsageDetailsResult { service: ServiceResult::failure(status, code, failure_reason(reason)), items: None }; }
+    if !(200..300).contains(&status) || !business_ok {
+        return UsageDetailsResult {
+            service: ServiceResult::failure(status, code, failure_reason(reason)),
+            items: None,
+        };
+    }
     match data {
         Some(data) => UsageDetailsResult {
             service: ServiceResult::success(status, code),
-            items: Some(data.items.into_iter().filter_map(|item| value_id(item.id).map(|id| UsageDetail { id, model: item.model, created_at: item.created_at, input_tokens: item.input_tokens.unwrap_or(0.0), output_tokens: item.output_tokens.unwrap_or(0.0) })).collect()),
+            items: Some(
+                data.items
+                    .into_iter()
+                    .filter_map(|item| {
+                        value_id(item.id).map(|id| UsageDetail {
+                            id,
+                            model: item.model,
+                            created_at: item.created_at,
+                            input_tokens: item.input_tokens.unwrap_or(0.0),
+                            output_tokens: item.output_tokens.unwrap_or(0.0),
+                        })
+                    })
+                    .collect(),
+            ),
         },
-        None => UsageDetailsResult { service: ServiceResult::failure(status, code, "INVALID_RESPONSE"), items: None },
+        None => UsageDetailsResult {
+            service: ServiceResult::failure(status, code, "INVALID_RESPONSE"),
+            items: None,
+        },
     }
 }
 
 #[tauri::command]
 async fn get_notifications(request: AccountRequest) -> NotificationsResult {
-    let session = match customer_session(&request.account_id) { Ok(session) => session, Err(reason) => return NotificationsResult { service: ServiceResult::failure(0, None, reason), items: None } };
-    let url = match endpoint_url(&session.base_url, "api/notifications") { Ok(url) => url, Err(()) => return NotificationsResult { service: ServiceResult::failure(0, None, "CONFIG_ERROR"), items: None } };
-    let client = match http_client() { Ok(client) => client, Err(()) => return NotificationsResult { service: ServiceResult::failure(0, None, "NETWORK_ERROR"), items: None } };
-    let (status, body) = match send(client.get(url).bearer_auth(&session.access_token)).await { Ok(response) => response, Err(()) => return NotificationsResult { service: ServiceResult::failure(0, None, "NETWORK_ERROR"), items: None } };
+    let session = match customer_session(&request.account_id) {
+        Ok(session) => session,
+        Err(reason) => {
+            return NotificationsResult {
+                service: ServiceResult::failure(0, None, reason),
+                items: None,
+            }
+        }
+    };
+    let url = match endpoint_url(&session.base_url, "api/notifications") {
+        Ok(url) => url,
+        Err(()) => {
+            return NotificationsResult {
+                service: ServiceResult::failure(0, None, "CONFIG_ERROR"),
+                items: None,
+            }
+        }
+    };
+    let client = match http_client() {
+        Ok(client) => client,
+        Err(()) => {
+            return NotificationsResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                items: None,
+            }
+        }
+    };
+    let (status, body) = match send(client.get(url).bearer_auth(&session.access_token)).await {
+        Ok(response) => response,
+        Err(()) => {
+            return NotificationsResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                items: None,
+            }
+        }
+    };
     let (code, reason, data, business_ok) = parse_response::<NotificationsData>(&body);
-    if !(200..300).contains(&status) || !business_ok { return NotificationsResult { service: ServiceResult::failure(status, code, failure_reason(reason)), items: None }; }
+    if !(200..300).contains(&status) || !business_ok {
+        return NotificationsResult {
+            service: ServiceResult::failure(status, code, failure_reason(reason)),
+            items: None,
+        };
+    }
     match data {
         Some(data) => NotificationsResult {
             service: ServiceResult::success(status, code),
-            items: Some(data.items.into_iter().filter_map(|item| value_id(item.id).map(|id| NotificationItem { id, title: item.title.unwrap_or_else(|| "通知".to_string()), content: item.content.unwrap_or_default(), time: item.created_at, read: item.read.unwrap_or(false) })).collect()),
+            items: Some(
+                data.items
+                    .into_iter()
+                    .filter_map(|item| {
+                        value_id(item.id).map(|id| NotificationItem {
+                            id,
+                            title: item.title.unwrap_or_else(|| "通知".to_string()),
+                            content: item.content.unwrap_or_default(),
+                            time: item.created_at,
+                            read: item.read.unwrap_or(false),
+                        })
+                    })
+                    .collect(),
+            ),
         },
-        None => NotificationsResult { service: ServiceResult::failure(status, code, "INVALID_RESPONSE"), items: None },
+        None => NotificationsResult {
+            service: ServiceResult::failure(status, code, "INVALID_RESPONSE"),
+            items: None,
+        },
     }
 }
 
 #[tauri::command]
 async fn mark_notifications_read(request: ReadNotificationsRequest) -> ServiceResult {
-    if request.notification_ids.is_empty() || request.notification_ids.len() > 100 { return ServiceResult::failure(400, Some(400), "INVALID_REQUEST"); }
-    let session = match customer_session(&request.account_id) { Ok(session) => session, Err(reason) => return ServiceResult::failure(0, None, reason) };
-    let url = match endpoint_url(&session.base_url, "api/notifications/read") { Ok(url) => url, Err(()) => return ServiceResult::failure(0, None, "CONFIG_ERROR") };
-    let client = match http_client() { Ok(client) => client, Err(()) => return ServiceResult::failure(0, None, "NETWORK_ERROR") };
-    let notification_ids: Vec<Value> = request.notification_ids.into_iter().map(|id| id.parse::<u64>().map(|id| Value::Number(id.into())).unwrap_or(Value::String(id))).collect();
-    let (status, body) = match send(client.post(url).bearer_auth(&session.access_token).json(&serde_json::json!({ "notification_ids": notification_ids }))).await { Ok(response) => response, Err(()) => return ServiceResult::failure(0, None, "NETWORK_ERROR") };
+    if request.notification_ids.is_empty() || request.notification_ids.len() > 100 {
+        return ServiceResult::failure(400, Some(400), "INVALID_REQUEST");
+    }
+    let session = match customer_session(&request.account_id) {
+        Ok(session) => session,
+        Err(reason) => return ServiceResult::failure(0, None, reason),
+    };
+    let url = match endpoint_url(&session.base_url, "api/notifications/read") {
+        Ok(url) => url,
+        Err(()) => return ServiceResult::failure(0, None, "CONFIG_ERROR"),
+    };
+    let client = match http_client() {
+        Ok(client) => client,
+        Err(()) => return ServiceResult::failure(0, None, "NETWORK_ERROR"),
+    };
+    let notification_ids: Vec<Value> = request
+        .notification_ids
+        .into_iter()
+        .map(|id| {
+            id.parse::<u64>()
+                .map(|id| Value::Number(id.into()))
+                .unwrap_or(Value::String(id))
+        })
+        .collect();
+    let (status, body) = match send(
+        client
+            .post(url)
+            .bearer_auth(&session.access_token)
+            .json(&serde_json::json!({ "notification_ids": notification_ids })),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(()) => return ServiceResult::failure(0, None, "NETWORK_ERROR"),
+    };
     let (code, reason, _, business_ok) = parse_response::<Value>(&body);
-    if (200..300).contains(&status) && business_ok { ServiceResult::success(status, code) } else { ServiceResult::failure(status, code, failure_reason(reason)) }
+    if (200..300).contains(&status) && business_ok {
+        ServiceResult::success(status, code)
+    } else {
+        ServiceResult::failure(status, code, failure_reason(reason))
+    }
 }
 
 #[tauri::command]
-fn delete_customer_session(request: AccountRequest) -> Result<(), String> {
+fn apply_codex_config(
+    app: tauri::AppHandle,
+    request: AccountRequest,
+) -> Result<codex_config::CodexConfigStatus, String> {
+    let session = customer_session(&request.account_id)?;
+    codex_config::apply(
+        &app,
+        &request.account_id,
+        &session.base_url,
+        &session.api_key,
+    )
+}
+
+#[tauri::command]
+fn restore_official_codex_config(
+    app: tauri::AppHandle,
+) -> Result<codex_config::CodexConfigStatus, String> {
+    codex_config::restore(&app)
+}
+
+#[tauri::command]
+fn diagnose_codex_config(
+    app: tauri::AppHandle,
+    request: OptionalAccountRequest,
+) -> Result<codex_config::CodexConfigStatus, String> {
+    let account_id = request
+        .account_id
+        .or(codex_config::configured_account(&app)?);
+    let session = account_id.as_deref().map(customer_session).transpose()?;
+    codex_config::diagnose(
+        &app,
+        session.as_ref().map(|value| value.base_url.as_str()),
+        session.as_ref().map(|value| value.api_key.as_str()),
+    )
+}
+
+#[tauri::command]
+fn delete_customer_session(app: tauri::AppHandle, request: AccountRequest) -> Result<(), String> {
+    if codex_config::configured_account(&app)?.as_deref() == Some(request.account_id.as_str()) {
+        codex_config::restore(&app)?;
+    }
     let entry = credential_entry(&request.account_id)?;
-    if entry.get_password().is_err() { return Ok(()); }
-    entry.delete_credential().map_err(|_| "无法删除系统安全凭据。".to_string())
+    if entry.get_password().is_err() {
+        return Ok(());
+    }
+    entry
+        .delete_credential()
+        .map_err(|_| "无法删除系统安全凭据。".to_string())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_response, same_account, ActivationCredentials, ActivationEnvelope, CustomerSession, UsageData, UsageDetailsData};
+    use super::{
+        activation_url, endpoint_url, parse_response, same_account, ActivationCredentials,
+        ActivationEnvelope, CustomerSession, UsageData, UsageDetailsData,
+    };
     use serde_json::Value;
 
     #[test]
@@ -306,7 +767,8 @@ mod tests {
 
     #[test]
     fn parses_usage_response() {
-        let response = r#"{"code":0,"message":"ok","data":{"quota":1000,"quota_used":250,"refresh_count":3}}"#;
+        let response =
+            r#"{"code":0,"message":"ok","data":{"quota":1000,"quota_used":250,"refresh_count":3}}"#;
         let (code, _, data, ok) = parse_response::<UsageData>(response);
         assert_eq!(code, Some(0));
         assert_eq!(data.unwrap().quota_used, Some(250.0));
@@ -330,9 +792,36 @@ mod tests {
     }
 
     #[test]
+    fn accepts_http_service_urls() {
+        assert_eq!(
+            activation_url("http://8.136.139.105:8080").unwrap().as_str(),
+            "http://8.136.139.105:8080/api/v1/customer/activate"
+        );
+        assert_eq!(
+            endpoint_url("http://8.136.139.105:8080", "api/usage")
+                .unwrap()
+                .as_str(),
+            "http://8.136.139.105:8080/api/usage"
+        );
+    }
+
+    #[test]
     fn detects_an_already_saved_account() {
-        let session = CustomerSession { base_url: "http://localhost".to_string(), access_token: "old-token".to_string(), refresh_token: None, api_key: "same-key".to_string(), expires_in: None, expires_at: None };
-        let credentials = ActivationCredentials { access_token: "new-token".to_string(), refresh_token: None, api_key: "same-key".to_string(), expires_in: None, expires_at: None };
+        let session = CustomerSession {
+            base_url: "http://localhost".to_string(),
+            access_token: "old-token".to_string(),
+            refresh_token: None,
+            api_key: "same-key".to_string(),
+            expires_in: None,
+            expires_at: None,
+        };
+        let credentials = ActivationCredentials {
+            access_token: "new-token".to_string(),
+            refresh_token: None,
+            api_key: "same-key".to_string(),
+            expires_in: None,
+            expires_at: None,
+        };
         assert!(same_account(&session, &credentials));
     }
 }
@@ -342,7 +831,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![activate_customer, get_usage, get_usage_details, get_notifications, mark_notifications_read, delete_customer_session])
+        .invoke_handler(tauri::generate_handler![
+            activate_customer,
+            get_usage,
+            get_usage_details,
+            get_notifications,
+            mark_notifications_read,
+            apply_codex_config,
+            restore_official_codex_config,
+            diagnose_codex_config,
+            delete_customer_session
+        ])
         .run(tauri::generate_context!())
         .expect("failed to start Sub2API Customer");
 }
