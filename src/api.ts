@@ -5,9 +5,14 @@ type ServiceResult = { success: boolean; status: number; code?: number; reason?:
 type UsageResult = ServiceResult & { usage?: { quota: number; used: number; requests: number } }
 type UsageDetailsResult = ServiceResult & { items?: RemoteUsageDetail[] }
 type NotificationsResult = ServiceResult & { items?: RemoteNotification[] }
+type ApiKeyResult = ServiceResult & { apiKey?: CustomerApiKey }
+type CustomerGroupsResult = ServiceResult & { items?: CustomerGroup[] }
+type SwitchGroupResult = ServiceResult & { apiKeyId?: number; group?: CustomerGroup }
 
 export type RemoteUsageDetail = { id: string; model: string; createdAt?: string; inputTokens: number; outputTokens: number }
 export type RemoteNotification = { id: string; title: string; content: string; time?: string; read: boolean }
+export type CustomerGroup = { id: number; name: string; description?: string; platform: string; rateMultiplier: number }
+export type CustomerApiKey = { id: number; group?: CustomerGroup }
 export type CodexConfigStatus = {
   healthy: boolean
   configured: boolean
@@ -49,6 +54,25 @@ const ensureService = <T extends ServiceResult>(result: T) => {
   return result
 }
 
+const groupErrorMessage = (status: number, reason?: string) => {
+  if (reason === 'CUSTOMER_API_KEY_NOT_UNIQUE') return '无法唯一识别有效的客户 API 密钥，请联系管理员。'
+  if (reason === 'CONFIG_ERROR') return '服务地址配置无效。'
+  if (reason === 'NETWORK_ERROR') return '无法连接服务器，请检查网络后重试。'
+  if (reason === 'INVALID_RESPONSE') return '服务器返回的分组信息无效。'
+  if (status === 400) return 'API 密钥或分组参数无效。'
+  if (status === 401) return '账号授权已失效，请重新激活。'
+  if (status === 403) return '当前账号无权使用该分组。'
+  if (status === 404) return '未找到有效的客户 API 密钥。'
+  if (status === 429) return '操作过于频繁，请稍后重试。'
+  if (status >= 500) return '服务端暂时无法处理分组操作。'
+  return '无法完成 API 密钥分组操作。'
+}
+
+const ensureGroupService = <T extends ServiceResult>(result: T) => {
+  if (!result.success) throw new ApiError(groupErrorMessage(result.status, result.reason), result.status, result.reason, undefined, result.code)
+  return result
+}
+
 export async function activate(baseUrl: string, code: string, deviceId: string, accountId: string, existingAccountIds: string[]) {
   const redemptionCode = code.trim()
   if (!redemptionCode || redemptionCode.length > 64) throw new ApiError('兑换码长度应为 1～64 个字符。')
@@ -78,6 +102,22 @@ export async function getNotifications(accountId: string) {
 
 export async function markNotificationsRead(accountId: string, notificationIds: string[]) {
   ensureService(await invoke<ServiceResult>('mark_notifications_read', { request: { accountId, notificationIds } }))
+}
+
+export async function getCustomerApiKey(accountId: string) {
+  const result = ensureGroupService(await invoke<ApiKeyResult>('get_customer_api_key', { request: { accountId } }))
+  if (!result.apiKey) throw new ApiError('服务器没有返回有效的客户 API 密钥。', result.status, 'INVALID_RESPONSE')
+  return result.apiKey
+}
+
+export async function getCustomerGroups(accountId: string) {
+  return ensureGroupService(await invoke<CustomerGroupsResult>('get_customer_groups', { request: { accountId } })).items ?? []
+}
+
+export async function switchCustomerApiKeyGroup(accountId: string, apiKeyId: number, groupId: number) {
+  const result = ensureGroupService(await invoke<SwitchGroupResult>('switch_customer_api_key_group', { request: { accountId, apiKeyId, groupId } }))
+  if (!result.group) throw new ApiError('服务器没有返回切换后的分组。', result.status, 'INVALID_RESPONSE')
+  return result.group
 }
 
 const codexErrorMessage = (reason: unknown) => {

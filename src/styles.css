@@ -85,7 +85,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .icon-button:hover { color: var(--paper); background: var(--ink); }
 .notification-button { position: relative; }
 .notification-button i { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 10px; color: white; background: var(--accent); font-size: 9px; font-style: normal; font-weight: 800; }
-.notification-panel, .usage-summary, .config-section, .usage-disclosure, .network-details { border: 1px solid #d2ccbf; border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px #423d3312; }
+.notification-panel, .group-section, .usage-summary, .recharge-section, .config-section, .usage-disclosure, .network-details { border: 1px solid #d2ccbf; border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px #423d3312; }
 .notification-panel { margin-bottom: 14px; padding: 0 14px 8px; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 16px 0 11px; }
 .panel-heading strong { font-size: 13px; }
@@ -96,12 +96,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .notification-panel article strong { font-size: 12px; }
 .notification-panel article time, .usage-row time { color: var(--muted); font-size: 10px; }
 .notification-panel article p { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
-.account-switcher { display: flex; gap: 8px; padding: 0 0 16px; overflow-x: auto; }
-.account-switcher button { flex: 0 0 auto; display: grid; gap: 3px; min-width: 98px; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; color: var(--muted); background: var(--surface); text-align: left; }
-.account-switcher button.is-active { border-color: var(--ink); color: var(--paper); background: var(--ink); }
-.account-switcher span { font-size: 11px; font-weight: 800; }
-.account-switcher code, .config-row code { overflow: hidden; font-family: "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
-.account-switcher code { font-size: 9px; }
+.group-section { margin-bottom: 14px; padding: 15px 14px 12px; }
+.group-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 10px; }
+.group-heading strong { color: var(--accent); font-size: 10px; }
+.group-switcher { display: flex; gap: 8px; overflow-x: auto; }
+.group-switcher button { position: relative; flex: 0 0 auto; display: grid; gap: 3px; min-width: 108px; padding: 10px 30px 10px 12px; border: 1px solid var(--rule); border-radius: 12px; color: var(--muted); background: var(--paper); text-align: left; }
+.group-switcher button.is-active { border-color: var(--ink); color: var(--paper); background: var(--ink); }
+.group-switcher button > svg { position: absolute; top: 13px; right: 10px; color: var(--accent); }
+.group-switcher span { font-size: 11px; font-weight: 800; }
+.group-switcher code, .config-row code { overflow: hidden; font-family: "Cascadia Code", Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.group-switcher code { font-size: 9px; }
+.group-loading { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 3px; color: var(--muted); font-size: 11px; }
 .usage-summary { padding: 24px 22px 20px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .section-label { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
@@ -110,6 +115,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .usage-meter i { display: block; height: 100%; border-radius: inherit; }
 .usage-meter.is-healthy i { background: #3e8a5b; }.usage-meter.is-medium i { background: #d49a20; }.usage-meter.is-low i { background: var(--accent); }
 .usage-meta { display: flex; justify-content: space-between; margin-top: 9px; color: var(--muted); font-size: 10px; }
+.recharge-section { margin-top: 14px; padding: 17px 18px; }
+.recharge-section > div { display: flex; align-items: center; gap: 11px; }
+.recharge-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--paper); background: var(--accent); }
+.recharge-section strong { display: block; font-size: 13px; }
+.recharge-section p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
+.recharge-section form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 14px; }
+.recharge-section input { min-width: 0; min-height: 42px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 11px; color: var(--ink); background: var(--paper); outline: none; }
+.recharge-section input:focus { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.recharge-section form button { min-width: 94px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--ink); border-radius: 11px; color: var(--paper); background: var(--ink); font-size: 11px; font-weight: 800; }
+.recharge-section > .form-success { margin-top: 11px; }
 .config-section { margin-top: 14px; padding: 20px 20px 8px; }
 .config-section .section-heading { align-items: center; margin-bottom: 16px; }
 .config-section h2 { margin: 0; font-size: 17px; }

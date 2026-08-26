@@ -59,6 +59,14 @@ struct ReadNotificationsRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SwitchApiKeyGroupRequest {
+    account_id: String,
+    api_key_id: i64,
+    group_id: i64,
+}
+
+#[derive(Deserialize)]
 struct ActivationEnvelope {
     code: Option<i64>,
     reason: Option<String>,
@@ -133,6 +141,42 @@ struct NotificationsData {
     items: Vec<RawNotification>,
 }
 
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
+struct CustomerGroup {
+    id: i64,
+    name: String,
+    description: Option<String>,
+    platform: String,
+    rate_multiplier: f64,
+}
+
+#[derive(Deserialize)]
+struct RawApiKey {
+    id: i64,
+    name: String,
+    status: String,
+    group: Option<CustomerGroup>,
+}
+
+#[derive(Deserialize)]
+struct ApiKeysData {
+    items: Vec<RawApiKey>,
+}
+
+#[derive(Deserialize)]
+struct SwitchApiKeyGroupData {
+    api_key_id: i64,
+    group: CustomerGroup,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiKeySummary {
+    id: i64,
+    group: Option<CustomerGroup>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct NotificationItem {
@@ -175,6 +219,31 @@ struct NotificationsResult {
     #[serde(flatten)]
     service: ServiceResult,
     items: Option<Vec<NotificationItem>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiKeyResult {
+    #[serde(flatten)]
+    service: ServiceResult,
+    api_key: Option<ApiKeySummary>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CustomerGroupsResult {
+    #[serde(flatten)]
+    service: ServiceResult,
+    items: Option<Vec<CustomerGroup>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SwitchApiKeyGroupResult {
+    #[serde(flatten)]
+    service: ServiceResult,
+    api_key_id: Option<i64>,
+    group: Option<CustomerGroup>,
 }
 
 impl ActivationResult {
@@ -255,9 +324,7 @@ fn customer_session(account_id: &str) -> Result<CustomerSession, String> {
 
 fn activation_url(base_url: &str) -> Result<Url, ()> {
     let url = Url::parse(base_url.trim()).map_err(|_| ())?;
-    if url.host().is_none()
-        || !matches!(url.scheme(), "http" | "https")
-    {
+    if url.host().is_none() || !matches!(url.scheme(), "http" | "https") {
         return Err(());
     }
     url.join("api/v1/customer/activate").map_err(|_| ())
@@ -265,9 +332,7 @@ fn activation_url(base_url: &str) -> Result<Url, ()> {
 
 fn endpoint_url(base_url: &str, path: &str) -> Result<Url, ()> {
     let url = Url::parse(base_url.trim()).map_err(|_| ())?;
-    if url.host().is_none()
-        || !matches!(url.scheme(), "http" | "https")
-    {
+    if url.host().is_none() || !matches!(url.scheme(), "http" | "https") {
         return Err(());
     }
     url.join(path).map_err(|_| ())
@@ -410,7 +475,9 @@ async fn activate_customer(request: ActivationRequest) -> ActivationResult {
         _ => return ActivationResult::failure(status, Some(0), "INVALID_RESPONSE", None),
     };
     let already_added = request.existing_account_ids.iter().any(|account_id| {
-        customer_session(account_id).is_ok_and(|session| same_account(&session, &credentials))
+        account_id != &request.account_id
+            && customer_session(account_id)
+                .is_ok_and(|session| same_account(&session, &credentials))
     });
     if already_added {
         return ActivationResult::failure(409, Some(409), "ACCOUNT_ALREADY_ADDED", None);
@@ -434,6 +501,216 @@ async fn activate_customer(request: ActivationRequest) -> ActivationResult {
         reason: None,
         retry_after: None,
         expires_at,
+    }
+}
+
+#[tauri::command]
+async fn get_customer_api_key(request: AccountRequest) -> ApiKeyResult {
+    let session = match customer_session(&request.account_id) {
+        Ok(session) => session,
+        Err(reason) => {
+            return ApiKeyResult {
+                service: ServiceResult::failure(0, None, reason),
+                api_key: None,
+            }
+        }
+    };
+    let mut url = match endpoint_url(&session.base_url, "api/v1/keys") {
+        Ok(url) => url,
+        Err(()) => {
+            return ApiKeyResult {
+                service: ServiceResult::failure(0, None, "CONFIG_ERROR"),
+                api_key: None,
+            }
+        }
+    };
+    url.query_pairs_mut()
+        .append_pair("page", "1")
+        .append_pair("page_size", "100");
+    let client = match http_client() {
+        Ok(client) => client,
+        Err(()) => {
+            return ApiKeyResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                api_key: None,
+            }
+        }
+    };
+    let (status, body) = match send(client.get(url).bearer_auth(&session.access_token)).await {
+        Ok(response) => response,
+        Err(()) => {
+            return ApiKeyResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                api_key: None,
+            }
+        }
+    };
+    let (code, reason, data, business_ok) = parse_response::<ApiKeysData>(&body);
+    if !(200..300).contains(&status) || !business_ok {
+        return ApiKeyResult {
+            service: ServiceResult::failure(status, code, failure_reason(reason)),
+            api_key: None,
+        };
+    }
+    let mut matches = data
+        .map(|data| {
+            data.items
+                .into_iter()
+                .filter(|key| key.name == "客户客户端" && key.status == "active")
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if matches.len() != 1 {
+        return ApiKeyResult {
+            service: ServiceResult::failure(status, code, "CUSTOMER_API_KEY_NOT_UNIQUE"),
+            api_key: None,
+        };
+    }
+    let key = matches.remove(0);
+    ApiKeyResult {
+        service: ServiceResult::success(status, code),
+        api_key: Some(ApiKeySummary {
+            id: key.id,
+            group: key.group,
+        }),
+    }
+}
+
+#[tauri::command]
+async fn get_customer_groups(request: AccountRequest) -> CustomerGroupsResult {
+    let session = match customer_session(&request.account_id) {
+        Ok(session) => session,
+        Err(reason) => {
+            return CustomerGroupsResult {
+                service: ServiceResult::failure(0, None, reason),
+                items: None,
+            }
+        }
+    };
+    let url = match endpoint_url(&session.base_url, "api/v1/customer/groups") {
+        Ok(url) => url,
+        Err(()) => {
+            return CustomerGroupsResult {
+                service: ServiceResult::failure(0, None, "CONFIG_ERROR"),
+                items: None,
+            }
+        }
+    };
+    let client = match http_client() {
+        Ok(client) => client,
+        Err(()) => {
+            return CustomerGroupsResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                items: None,
+            }
+        }
+    };
+    let (status, body) = match send(client.get(url).bearer_auth(&session.access_token)).await {
+        Ok(response) => response,
+        Err(()) => {
+            return CustomerGroupsResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                items: None,
+            }
+        }
+    };
+    let (code, reason, groups, business_ok) = parse_response::<Vec<CustomerGroup>>(&body);
+    if !(200..300).contains(&status) || !business_ok {
+        return CustomerGroupsResult {
+            service: ServiceResult::failure(status, code, failure_reason(reason)),
+            items: None,
+        };
+    }
+    match groups {
+        Some(groups) => CustomerGroupsResult {
+            service: ServiceResult::success(status, code),
+            items: Some(groups),
+        },
+        None => CustomerGroupsResult {
+            service: ServiceResult::failure(status, code, "INVALID_RESPONSE"),
+            items: None,
+        },
+    }
+}
+
+#[tauri::command]
+async fn switch_customer_api_key_group(
+    request: SwitchApiKeyGroupRequest,
+) -> SwitchApiKeyGroupResult {
+    if request.api_key_id <= 0 || request.group_id <= 0 {
+        return SwitchApiKeyGroupResult {
+            service: ServiceResult::failure(400, Some(400), "INVALID_REQUEST"),
+            api_key_id: None,
+            group: None,
+        };
+    }
+    let session = match customer_session(&request.account_id) {
+        Ok(session) => session,
+        Err(reason) => {
+            return SwitchApiKeyGroupResult {
+                service: ServiceResult::failure(0, None, reason),
+                api_key_id: None,
+                group: None,
+            }
+        }
+    };
+    let path = format!("api/v1/customer/api-keys/{}/group", request.api_key_id);
+    let url = match endpoint_url(&session.base_url, &path) {
+        Ok(url) => url,
+        Err(()) => {
+            return SwitchApiKeyGroupResult {
+                service: ServiceResult::failure(0, None, "CONFIG_ERROR"),
+                api_key_id: None,
+                group: None,
+            }
+        }
+    };
+    let client = match http_client() {
+        Ok(client) => client,
+        Err(()) => {
+            return SwitchApiKeyGroupResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                api_key_id: None,
+                group: None,
+            }
+        }
+    };
+    let (status, body) = match send(
+        client
+            .put(url)
+            .bearer_auth(&session.access_token)
+            .json(&serde_json::json!({ "group_id": request.group_id })),
+    )
+    .await
+    {
+        Ok(response) => response,
+        Err(()) => {
+            return SwitchApiKeyGroupResult {
+                service: ServiceResult::failure(0, None, "NETWORK_ERROR"),
+                api_key_id: None,
+                group: None,
+            }
+        }
+    };
+    let (code, reason, data, business_ok) = parse_response::<SwitchApiKeyGroupData>(&body);
+    if !(200..300).contains(&status) || !business_ok {
+        return SwitchApiKeyGroupResult {
+            service: ServiceResult::failure(status, code, failure_reason(reason)),
+            api_key_id: None,
+            group: None,
+        };
+    }
+    match data {
+        Some(data) => SwitchApiKeyGroupResult {
+            service: ServiceResult::success(status, code),
+            api_key_id: Some(data.api_key_id),
+            group: Some(data.group),
+        },
+        None => SwitchApiKeyGroupResult {
+            service: ServiceResult::failure(status, code, "INVALID_RESPONSE"),
+            api_key_id: None,
+            group: None,
+        },
     }
 }
 
@@ -752,7 +1029,8 @@ fn delete_customer_session(app: tauri::AppHandle, request: AccountRequest) -> Re
 mod tests {
     use super::{
         activation_url, endpoint_url, parse_response, same_account, ActivationCredentials,
-        ActivationEnvelope, CustomerSession, UsageData, UsageDetailsData,
+        ActivationEnvelope, ApiKeysData, CustomerGroup, CustomerSession, SwitchApiKeyGroupData,
+        UsageData, UsageDetailsData,
     };
     use serde_json::Value;
 
@@ -792,9 +1070,53 @@ mod tests {
     }
 
     #[test]
+    fn parses_customer_api_key_with_no_group() {
+        let response = r#"{"code":0,"data":{"items":[{"id":12,"name":"客户客户端","status":"active","group":null}]}}"#;
+        let (_, _, data, ok) = parse_response::<ApiKeysData>(response);
+        let key = &data.unwrap().items[0];
+        assert_eq!(key.id, 12);
+        assert!(key.group.is_none());
+        assert!(ok);
+    }
+
+    #[test]
+    fn parses_customer_groups_array() {
+        let response = r#"{"code":0,"data":[{"id":6,"name":"OpenAI","description":"OpenAI 模型分组","platform":"openai","rate_multiplier":1}]}"#;
+        let (_, _, groups, ok) = parse_response::<Vec<CustomerGroup>>(response);
+        let group = &groups.unwrap()[0];
+        assert_eq!(group.id, 6);
+        assert_eq!(group.platform, "openai");
+        assert!(ok);
+    }
+
+    #[test]
+    fn parses_switched_group() {
+        let response = r#"{"code":0,"data":{"api_key_id":12,"group":{"id":6,"name":"OpenAI","description":"OpenAI 模型分组","platform":"openai","rate_multiplier":1}}}"#;
+        let (_, _, data, ok) = parse_response::<SwitchApiKeyGroupData>(response);
+        let data = data.unwrap();
+        assert_eq!(data.api_key_id, 12);
+        assert_eq!(data.group.id, 6);
+        assert!(ok);
+    }
+
+    #[test]
+    fn builds_api_key_list_query() {
+        let mut url = endpoint_url("http://localhost:8080", "api/v1/keys").unwrap();
+        url.query_pairs_mut()
+            .append_pair("page", "1")
+            .append_pair("page_size", "100");
+        assert_eq!(
+            url.as_str(),
+            "http://localhost:8080/api/v1/keys?page=1&page_size=100"
+        );
+    }
+
+    #[test]
     fn accepts_http_service_urls() {
         assert_eq!(
-            activation_url("http://8.136.139.105:8080").unwrap().as_str(),
+            activation_url("http://8.136.139.105:8080")
+                .unwrap()
+                .as_str(),
             "http://8.136.139.105:8080/api/v1/customer/activate"
         );
         assert_eq!(
@@ -833,6 +1155,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             activate_customer,
+            get_customer_api_key,
+            get_customer_groups,
+            switch_customer_api_key_group,
             get_usage,
             get_usage_details,
             get_notifications,
