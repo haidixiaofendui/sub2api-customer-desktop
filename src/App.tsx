@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
-import { IconBell, IconChevronDown, IconGlobe, IconHome, IconKey, IconLoader2, IconPlus, IconRefresh } from '@tabler/icons-react'
+import { IconAlertTriangle, IconBell, IconChevronDown, IconGlobe, IconHome, IconKey, IconLoader2, IconPlus, IconRefresh, IconX } from '@tabler/icons-react'
 import { activate, applyCodexConfig, diagnoseCodexConfig, getCustomerApiKey, getCustomerGroups, getNotifications, getUsage, getUsageDetails, markNotificationsRead, restoreOfficialCodexConfig, switchCustomerApiKeyGroup, ApiError } from './api'
 import type { CodexConfigStatus, CustomerApiKey, CustomerGroup } from './api'
 import type { Account, Notification } from './model'
@@ -153,6 +153,7 @@ function Workspace({ account, onUpdate, onHome }: { account: Account; onUpdate: 
 function CodexConfigActions({ accountId, groupAssigned }: { accountId: string; groupAssigned: boolean }) {
   const [status, setStatus] = useState<CodexConfigStatus | null>(null)
   const [busy, setBusy] = useState<'apply' | 'restore' | ''>('')
+  const [confirmation, setConfirmation] = useState<'apply' | 'restore' | null>(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
@@ -166,7 +167,6 @@ function CodexConfigActions({ accountId, groupAssigned }: { accountId: string; g
   }, [accountId])
 
   const apply = async () => {
-    if (!window.confirm('将备份当前官方配置，并修改 Codex 的 auth.json、config.toml 和历史任务 Provider。是否继续？')) return
     setBusy('apply'); setError(''); setMessage('')
     try {
       const result = await applyCodexConfig(accountId)
@@ -175,7 +175,6 @@ function CodexConfigActions({ accountId, groupAssigned }: { accountId: string; g
   }
 
   const restore = async () => {
-    if (!window.confirm('将恢复本工具第一次修改前的官方 Codex 配置，并迁移历史任务。账号记录不会删除。是否继续？')) return
     setBusy('restore'); setError(''); setMessage('')
     try {
       const result = await restoreOfficialCodexConfig()
@@ -185,5 +184,23 @@ function CodexConfigActions({ accountId, groupAssigned }: { accountId: string; g
 
   const activeHere = status?.configured && status.currentAccountId === accountId
   const stateLabel = !status ? '正在检查' : activeHere && status.healthy ? '当前账号已应用' : status.configured ? '其他账号已应用' : '官方配置'
-  return <div className="codex-actions"><div className="codex-state"><div><strong>Codex 一键配置</strong><span className={activeHere ? 'is-active' : ''}>{stateLabel}</span></div><p>{groupAssigned ? status?.configured ? `${status.provider ?? 'sub2api'} · ${status.model ?? 'gpt-5.5'}` : '修改前自动保存首次官方基线' : '请先为 API 密钥选择分组'}</p></div>{message && <p className="form-success" role="status">{message}</p>}{error && <p className="form-error" role="alert">{error}</p>}<div className="codex-buttons"><button className="codex-apply" onClick={() => void apply()} disabled={!!busy || !groupAssigned}>{busy === 'apply' && <IconLoader2 size={15} className="spin" />}{busy === 'apply' ? '正在修改' : activeHere ? '重新应用' : '一键修改'}</button><button className="codex-restore" onClick={() => void restore()} disabled={!!busy || !status?.backupAvailable}>{busy === 'restore' && <IconLoader2 size={15} className="spin" />}{busy === 'restore' ? '正在还原' : '还原官方配置'}</button></div></div>
+  const confirmOperation = () => {
+    const operation = confirmation
+    setConfirmation(null)
+    if (operation === 'apply') void apply()
+    if (operation === 'restore') void restore()
+  }
+  return <div className="codex-actions"><div className="codex-state"><div><strong>Codex 一键配置</strong><span className={activeHere ? 'is-active' : ''}>{stateLabel}</span></div><p>{groupAssigned ? status?.configured ? `${status.provider ?? 'sub2api'} · ${status.model ?? 'gpt-5.5'}` : '修改前自动保存首次官方基线' : '请先为 API 密钥选择分组'}</p></div>{message && <p className="form-success" role="status">{message}</p>}{error && <p className="form-error" role="alert">{error}</p>}<div className="codex-buttons"><button className="codex-apply" onClick={() => setConfirmation('apply')} disabled={!!busy || !groupAssigned}>{busy === 'apply' && <IconLoader2 size={15} className="spin" />}{busy === 'apply' ? '正在修改' : activeHere ? '重新应用' : '一键修改'}</button><button className="codex-restore" onClick={() => setConfirmation('restore')} disabled={!!busy || !status?.backupAvailable}>{busy === 'restore' && <IconLoader2 size={15} className="spin" />}{busy === 'restore' ? '正在还原' : '还原官方配置'}</button></div>{confirmation && <ConfirmationModal operation={confirmation} onCancel={() => setConfirmation(null)} onConfirm={confirmOperation} />}</div>
+}
+
+function ConfirmationModal({ operation, onCancel, onConfirm }: { operation: 'apply' | 'restore'; onCancel: () => void; onConfirm: () => void }) {
+  const cancelButton = useRef<HTMLButtonElement>(null)
+  const applying = operation === 'apply'
+  useEffect(() => {
+    cancelButton.current?.focus()
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onCancel])
+  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel() }}><section className="confirmation-modal" role="dialog" aria-modal="true" aria-labelledby="codex-confirm-title" aria-describedby="codex-confirm-description"><div className="modal-mark"><IconAlertTriangle size={21} /></div><button className="modal-close" onClick={onCancel} aria-label="关闭"><IconX size={18} /></button><span className="modal-kicker">CODEX CONFIGURATION</span><h2 id="codex-confirm-title">{applying ? '确认修改 Codex 配置？' : '确认还原官方配置？'}</h2><p id="codex-confirm-description">{applying ? '将备份当前官方配置，并修改 auth.json、config.toml 和历史任务 Provider。' : '将恢复本工具首次修改前的官方配置，并迁移历史任务。账号记录不会删除。'}</p><div className="modal-note"><strong>{applying ? '操作完成后' : '还原完成后'}</strong><span>需要重启 Codex 才能使配置生效</span></div><div className="modal-actions"><button ref={cancelButton} className="modal-cancel" onClick={onCancel}>取消</button><button className={applying ? 'modal-confirm' : 'modal-confirm is-restore'} onClick={onConfirm}>{applying ? '确认修改' : '确认还原'}</button></div></section></div>
 }
