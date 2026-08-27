@@ -403,12 +403,27 @@ fn usage_snapshot(data: UsageData) -> Option<UsageSnapshot> {
         return None;
     }
     let quota = data.quota.as_ref();
-    let remaining = data.remaining.or_else(|| quota.and_then(|value| value.remaining))?;
+    let remaining = data
+        .remaining
+        .or_else(|| quota.and_then(|value| value.remaining))?;
     let quota_limit = quota.and_then(|value| value.limit);
     let limit = quota_limit.or(data.balance).unwrap_or(remaining);
-    let used = quota.and_then(|value| value.used).unwrap_or_else(|| (limit - remaining).max(0.0));
-    let unit = data.unit.or_else(|| quota.and_then(|value| value.unit.clone())).unwrap_or_else(|| "USD".to_string());
-    Some(UsageSnapshot { quota: limit, used, remaining, has_quota: quota_limit.is_some(), unit, mode: data.mode, plan_name: data.plan_name })
+    let used = quota
+        .and_then(|value| value.used)
+        .unwrap_or_else(|| (limit - remaining).max(0.0));
+    let unit = data
+        .unit
+        .or_else(|| quota.and_then(|value| value.unit.clone()))
+        .unwrap_or_else(|| "USD".to_string());
+    Some(UsageSnapshot {
+        quota: limit,
+        used,
+        remaining,
+        has_quota: quota_limit.is_some(),
+        unit,
+        mode: data.mode,
+        plan_name: data.plan_name,
+    })
 }
 
 fn value_id(value: Value) -> Option<String> {
@@ -1054,9 +1069,9 @@ fn delete_customer_session(app: tauri::AppHandle, request: AccountRequest) -> Re
 #[cfg(test)]
 mod tests {
     use super::{
-        activation_url, endpoint_url, parse_response, same_account, usage_snapshot, ActivationCredentials,
-        ActivationEnvelope, ApiKeysData, CustomerGroup, CustomerSession, SwitchApiKeyGroupData,
-        UsageData, UsageDetailsData,
+        activation_url, endpoint_url, parse_response, same_account, usage_snapshot,
+        ActivationCredentials, ActivationEnvelope, ApiKeysData, CustomerGroup, CustomerSession,
+        SwitchApiKeyGroupData, UsageData, UsageDetailsData,
     };
     use serde_json::Value;
 
