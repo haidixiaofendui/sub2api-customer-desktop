@@ -14,9 +14,8 @@ export type Account = {
   plan: string
   status: '可用' | '受限'
   relayUrl: string
-  defaultModel: string
   expiresAt?: string
-  usage: { quota: number; used: number; requests: number; updatedAt: string }
+  usage: { quota: number; used: number; remaining?: number; unit?: string; mode?: string; planName?: string; updatedAt: string }
   details: UsageDetail[]
   trace: { ip: string; location: string; tls: string }
 }

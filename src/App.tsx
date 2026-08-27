@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
-import { IconAlertTriangle, IconBell, IconChevronDown, IconGlobe, IconHome, IconKey, IconLoader2, IconPlus, IconRefresh, IconTrash } from '@tabler/icons-react'
-import { activate, applyCodexConfig, deleteCustomerSession, diagnoseCodexConfig, getCustomerApiKey, getCustomerGroups, getNotifications, getUsage, getUsageDetails, markNotificationsRead, restoreOfficialCodexConfig, switchCustomerApiKeyGroup, ApiError } from './api'
+import { IconBell, IconChevronDown, IconGlobe, IconHome, IconKey, IconLoader2, IconPlus, IconRefresh } from '@tabler/icons-react'
+import { activate, applyCodexConfig, diagnoseCodexConfig, getCustomerApiKey, getCustomerGroups, getNotifications, getUsage, getUsageDetails, markNotificationsRead, restoreOfficialCodexConfig, switchCustomerApiKeyGroup, ApiError } from './api'
 import type { CodexConfigStatus, CustomerApiKey, CustomerGroup } from './api'
 import type { Account, Notification } from './model'
 import { deviceId, loadAccounts, saveAccounts } from './storage'
@@ -11,11 +11,12 @@ const relayUrl = `${baseUrl.replace(/\/+$/, '')}/v1`
 const desktop = isTauri()
 const number = (value: number) => new Intl.NumberFormat('zh-CN').format(value)
 const percent = (value: number, total: number) => total ? Math.min(100, Math.round(value / total * 100)) : 0
+const amount = (value: number, unit = 'USD') => unit === 'USD' ? `$${new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(value)}` : `${new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(value)} ${unit}`
 const activationId = async (code: string, deviceId: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${deviceId}\0${code.trim()}`))), (byte) => byte.toString(16).padStart(2, '0')).join('')
 
 const accountFromActivation = (id: string, fingerprint: string, expiresAt?: string): Account => ({
-  id, activationId: fingerprint, name: '客户账号', plan: '已激活', status: '可用', relayUrl, defaultModel: 'gpt-5.5', expiresAt,
-  usage: { quota: 0, used: 0, requests: 0, updatedAt: '' }, details: [],
+  id, activationId: fingerprint, name: '客户账号', plan: '已激活', status: '可用', relayUrl, expiresAt,
+  usage: { quota: 0, used: 0, remaining: undefined, unit: 'USD', updatedAt: '' }, details: [],
   trace: { ip: '--', location: '--', tls: baseUrl.startsWith('https:') ? 'TLS' : 'HTTP' },
 })
 
@@ -35,18 +36,9 @@ export default function App() {
   useEffect(() => { if (storageReady && storageWritable) void saveAccounts(accounts).catch(() => setStorageWritable(false)) }, [accounts, storageReady, storageWritable])
   const setAccount = (account: Account) => setAccounts([account])
   const updateAccount = (id: string, patch: Partial<Account>) => setAccounts((current) => current.map((account) => account.id === id ? { ...account, ...patch } : account))
-  const removeAccount = async (id: string) => {
-    await deleteCustomerSession(id)
-    setAccounts((current) => {
-      const next = current.filter((account) => account.id !== id)
-      if (!next.length) setView('home')
-      return next
-    })
-  }
-
   if (!storageReady) return <main className="activation-shell"><section className="activation-panel loading-panel"><IconLoader2 className="spin" /></section></main>
   return view === 'workspace' && accounts.length
-    ? <Workspace account={accounts[0]} onUpdate={updateAccount} onHome={() => setView('home')} onDelete={removeAccount} />
+    ? <Workspace account={accounts[0]} onUpdate={updateAccount} onHome={() => setView('home')} />
     : <ActivationForm account={accounts[0]} storageWritable={storageWritable} onSuccess={setAccount} onOpen={() => setView('workspace')} />
 }
 
@@ -81,14 +73,13 @@ function ActivationForm({ account, storageWritable, onSuccess, onOpen }: { accou
   </section></main>
 }
 
-function Workspace({ account, onUpdate, onHome, onDelete }: { account: Account; onUpdate: (id: string, patch: Partial<Account>) => void; onHome: () => void; onDelete: (id: string) => Promise<void> }) {
+function Workspace({ account, onUpdate, onHome }: { account: Account; onUpdate: (id: string, patch: Partial<Account>) => void; onHome: () => void }) {
   const [usageOpen, setUsageOpen] = useState(false)
   const [noticesOpen, setNoticesOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [workspaceError, setWorkspaceError] = useState('')
-  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null)
   const [groups, setGroups] = useState<CustomerGroup[]>([])
   const [apiKey, setApiKey] = useState<CustomerApiKey | null>(null)
   const [groupsLoading, setGroupsLoading] = useState(true)
@@ -97,8 +88,9 @@ function Workspace({ account, onUpdate, onHome, onDelete }: { account: Account; 
   const [recharging, setRecharging] = useState(false)
   const [rechargeMessage, setRechargeMessage] = useState('')
   const [reloadVersion, setReloadVersion] = useState(0)
-  const usageReady = !!account.usage.updatedAt
-  const remainingPercent = 100 - percent(account.usage.used, account.usage.quota)
+  const usageReady = !!account.usage.updatedAt && Number.isFinite(account.usage.remaining)
+  const remaining = usageReady ? Math.max(0, account.usage.remaining ?? 0) : 0
+  const remainingPercent = usageReady ? (account.usage.quota > 0 ? percent(remaining, account.usage.quota) : remaining > 0 ? 100 : 0) : 0
   const quotaTone = remainingPercent <= 15 ? 'is-low' : remainingPercent <= 50 ? 'is-medium' : 'is-healthy'
   const unread = notifications.filter((item) => !item.read).length
   useEffect(() => {
@@ -109,7 +101,6 @@ function Workspace({ account, onUpdate, onHome, onDelete }: { account: Account; 
     void Promise.all([getCustomerApiKey(account.id), getCustomerGroups(account.id)]).then(([key, availableGroups]) => { if (!cancelled) { setApiKey(key); setGroups(availableGroups) } }).catch((reason) => { if (!cancelled) { setApiKey(null); setGroups([]); setWorkspaceError(reason instanceof Error ? reason.message : '无法获取可用分组。') } }).finally(() => { if (!cancelled) setGroupsLoading(false) })
     return () => { cancelled = true }
   }, [account.id, reloadVersion])
-  useEffect(() => { if (!accountToDelete) return; const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setAccountToDelete(null) }; window.addEventListener('keydown', closeOnEscape); return () => window.removeEventListener('keydown', closeOnEscape) }, [accountToDelete])
   const refresh = async () => {
     setRefreshing(true); setWorkspaceError('')
     try { onUpdate(account.id, { usage: await getUsage(account.id) }) } catch (reason) { setWorkspaceError(reason instanceof Error ? reason.message : '无法获取用量。') } finally { setRefreshing(false) }
@@ -151,12 +142,12 @@ function Workspace({ account, onUpdate, onHome, onDelete }: { account: Account; 
     {workspaceError && <p className="form-error" role="alert">{workspaceError}</p>}
     {noticesOpen && <section className="notification-panel"><div className="panel-heading"><strong>通知</strong>{unread > 0 && <button onClick={() => void markRead()}>全部已读</button>}</div>{notifications.length ? notifications.map((item) => <article key={item.id} className={item.read ? '' : 'is-unread'}><div><strong>{item.title}</strong><time>{item.time ? new Date(item.time).toLocaleString('zh-CN') : ''}</time></div><p>{item.content}</p></article>) : <p className="empty">暂无通知</p>}</section>}
     <section className="group-section"><div className="group-heading"><span className="section-label">API 密钥分组</span>{!groupsLoading && !apiKey?.group && <strong>请选择分组</strong>}</div><nav className="group-switcher" aria-label="API 密钥分组">{groupsLoading ? <span className="group-loading"><IconLoader2 size={15} className="spin" />正在获取分组</span> : groups.length ? groups.map((group) => <button key={group.id} className={apiKey?.group?.id === group.id ? 'is-active' : ''} onClick={() => void switchGroup(group)} disabled={!apiKey || switchingGroup !== null}><span>{group.name}</span><code>{group.platform} · {group.rateMultiplier}x</code>{switchingGroup === group.id && <IconLoader2 size={13} className="spin" />}</button>) : <span className="group-loading">暂无可用分组</span>}</nav></section>
-    <section className="usage-summary"><div className="section-heading"><div><span className="section-label">剩余额度</span><h1>{usageReady ? number(Math.max(0, account.usage.quota - account.usage.used)) : '—'}</h1></div><button className="icon-button" onClick={() => void refresh()} aria-label="刷新用量" disabled={refreshing}><IconRefresh size={18} className={refreshing ? 'spin' : ''} /></button></div><div className={`usage-meter ${quotaTone}`} role="progressbar" aria-label="剩余额度" aria-valuenow={usageReady ? remainingPercent : 0} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${usageReady ? remainingPercent : 0}%` }} /></div><div className="usage-meta"><span>{usageReady ? `剩余 ${remainingPercent}% · 已用 ${number(account.usage.used)} / ${number(account.usage.quota)}` : '正在同步额度'}</span><span>{account.usage.updatedAt ? `已同步 ${new Date(account.usage.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}` : '尚未同步'} · 刷新 {account.usage.requests} 次</span></div></section>
+    <section className="usage-summary"><div className="section-heading"><div><span className="section-label">{account.usage.planName || '剩余额度'}</span><h1>{usageReady ? amount(remaining, account.usage.unit) : '—'}</h1></div><button className="icon-button" onClick={() => void refresh()} aria-label="刷新用量" disabled={refreshing}><IconRefresh size={18} className={refreshing ? 'spin' : ''} /></button></div><div className={`usage-meter ${quotaTone}`} role="progressbar" aria-label="剩余额度" aria-valuenow={remainingPercent} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${remainingPercent}%` }} /></div><div className="usage-meta"><span>{usageReady ? `剩余 ${remainingPercent}% · 已用 ${amount(account.usage.used, account.usage.unit)} / ${amount(account.usage.quota, account.usage.unit)}` : '正在同步额度'}</span><span>{account.usage.updatedAt ? `已同步 ${new Date(account.usage.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}` : '尚未同步'}</span></div></section>
     <section className="recharge-section"><div><span className="recharge-icon"><IconPlus size={18} /></span><div><strong>增加额度</strong><p>新卡密将充值到当前设备账号</p></div></div><form onSubmit={recharge}><input value={rechargeCode} onChange={(event) => setRechargeCode(event.target.value)} placeholder="输入新卡密" autoComplete="off" aria-label="新卡密" required /><button disabled={recharging || !rechargeCode.trim()}>{recharging && <IconLoader2 size={14} className="spin" />}{recharging ? '正在增加' : '增加额度'}</button></form>{rechargeMessage && <p className="form-success" role="status">{rechargeMessage}</p>}</section>
-    <section className="config-section"><div className="section-heading"><h2>账号配置</h2><div className="config-actions"><span className={`status ${account.status === '可用' ? 'is-ok' : ''}`}>{account.status}</span><button className="delete-button" onClick={() => setAccountToDelete(account)}><IconTrash size={15} />删除</button></div></div><div className="config-row"><span>API 密钥</span><code>{apiKey?.group ? `已绑定 ${apiKey.group.name}` : '尚未分组'}</code></div><div className="config-row"><span>转发地址</span><code>{account.relayUrl}</code></div><dl className="account-facts"><div><dt>默认模型</dt><dd>{account.defaultModel}</dd></div><div><dt>有效期</dt><dd>{account.expiresAt ? new Date(account.expiresAt).toLocaleDateString('zh-CN') : '长期有效'}</dd></div></dl><CodexConfigActions accountId={account.id} groupAssigned={!!apiKey?.group} /></section>
+    <section className="config-section"><div className="section-heading"><h2>账号配置</h2><span className={`status ${account.status === '可用' ? 'is-ok' : ''}`}>{account.status}</span></div><div className="config-row"><span>API 密钥</span><code>{apiKey?.group ? `已绑定 ${apiKey.group.name}` : '尚未分组'}</code></div><dl className="account-facts"><div><dt>有效期</dt><dd>{account.expiresAt ? new Date(account.expiresAt).toLocaleDateString('zh-CN') : '长期有效'}</dd></div></dl><CodexConfigActions accountId={account.id} groupAssigned={!!apiKey?.group} /></section>
     <section className={`usage-disclosure${usageOpen ? ' is-open' : ''}`}><button className="usage-toggle" onClick={() => void toggleUsage()} aria-expanded={usageOpen} aria-controls="usage-details" disabled={detailsLoading}><span className="usage-toggle-icon"><IconKey size={19} /></span><strong>{detailsLoading ? '正在加载' : '用量明细'}</strong><IconChevronDown className="chevron" size={19} /></button>{usageOpen && <div id="usage-details" className="usage-content">{account.details.length ? account.details.map((item) => <article className="usage-row" key={item.id}><div><strong>{item.model}</strong><time>{new Date(item.time).toLocaleString('zh-CN')}</time></div><span>{number(item.inputTokens)} 输入<br />{number(item.outputTokens)} 输出</span></article>) : <p className="empty">{detailsLoading ? '正在加载…' : '暂无用量记录'}</p>}</div>}</section>
     <details className="network-details"><summary><span><IconGlobe size={19} />网络信息</span><IconChevronDown size={19} /></summary><dl><div><dt>IP</dt><dd>{account.trace.ip}</dd></div><div><dt>地区</dt><dd>{account.trace.location}</dd></div><div><dt>TLS</dt><dd>{account.trace.tls}</dd></div></dl></details>
-  </main>{accountToDelete && <DeleteDialog account={accountToDelete} onCancel={() => setAccountToDelete(null)} onConfirm={async () => { await onDelete(accountToDelete.id); setAccountToDelete(null) }} />}</>
+  </main></>
 }
 
 function CodexConfigActions({ accountId, groupAssigned }: { accountId: string; groupAssigned: boolean }) {
@@ -195,10 +186,4 @@ function CodexConfigActions({ accountId, groupAssigned }: { accountId: string; g
   const activeHere = status?.configured && status.currentAccountId === accountId
   const stateLabel = !status ? '正在检查' : activeHere && status.healthy ? '当前账号已应用' : status.configured ? '其他账号已应用' : '官方配置'
   return <div className="codex-actions"><div className="codex-state"><div><strong>Codex 一键配置</strong><span className={activeHere ? 'is-active' : ''}>{stateLabel}</span></div><p>{groupAssigned ? status?.configured ? `${status.provider ?? 'sub2api'} · ${status.model ?? 'gpt-5.5'}` : '修改前自动保存首次官方基线' : '请先为 API 密钥选择分组'}</p></div>{message && <p className="form-success" role="status">{message}</p>}{error && <p className="form-error" role="alert">{error}</p>}<div className="codex-buttons"><button className="codex-apply" onClick={() => void apply()} disabled={!!busy || !groupAssigned}>{busy === 'apply' && <IconLoader2 size={15} className="spin" />}{busy === 'apply' ? '正在修改' : activeHere ? '重新应用' : '一键修改'}</button><button className="codex-restore" onClick={() => void restore()} disabled={!!busy || !status?.backupAvailable}>{busy === 'restore' && <IconLoader2 size={15} className="spin" />}{busy === 'restore' ? '正在还原' : '还原官方配置'}</button></div></div>
-}
-
-function DeleteDialog({ account, onCancel, onConfirm }: { account: Account; onCancel: () => void; onConfirm: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false); const [error, setError] = useState('')
-  const confirm = async () => { setBusy(true); setError(''); try { await onConfirm() } catch (reason) { setError(reason instanceof Error ? reason.message : '无法删除账号。') } finally { setBusy(false) } }
-  return <div className="delete-dialog-backdrop" role="presentation" onMouseDown={busy ? undefined : onCancel}><section className="delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-dialog-title" aria-describedby="delete-dialog-description" onMouseDown={(event) => event.stopPropagation()}><span className="delete-dialog-icon"><IconAlertTriangle size={22} /></span><div><p className="delete-dialog-kicker">危险操作</p><h2 id="delete-dialog-title">删除这个账号？</h2></div><p id="delete-dialog-description">将移除“{account.name}”的本地记录和系统安全凭据。</p>{error && <p className="form-error" role="alert">{error}</p>}<div className="delete-dialog-actions"><button className="dialog-cancel" onClick={onCancel} disabled={busy} autoFocus>保留账号</button><button className="dialog-confirm" onClick={() => void confirm()} disabled={busy}><IconTrash size={16} />{busy ? '正在删除' : '确认删除'}</button></div></section></div>
 }

@@ -86,11 +86,23 @@ struct ActivationResult {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 struct UsageData {
-    quota: Option<f64>,
-    quota_used: Option<f64>,
-    refresh_count: Option<u64>,
+    mode: Option<String>,
+    is_valid: Option<bool>,
+    plan_name: Option<String>,
+    balance: Option<f64>,
+    remaining: Option<f64>,
+    unit: Option<String>,
+    quota: Option<UsageQuota>,
+}
+
+#[derive(Deserialize)]
+struct UsageQuota {
+    limit: Option<f64>,
+    used: Option<f64>,
+    remaining: Option<f64>,
+    unit: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -98,7 +110,10 @@ struct UsageData {
 struct UsageSnapshot {
     quota: f64,
     used: f64,
-    requests: u64,
+    remaining: f64,
+    unit: String,
+    mode: Option<String>,
+    plan_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -365,6 +380,7 @@ fn parse_response<T: DeserializeOwned>(
         .and_then(Value::as_str)
         .or(text_code)
         .or_else(|| value.get("message").and_then(Value::as_str))
+        .or_else(|| value.pointer("/error/message").and_then(Value::as_str))
         .map(ToOwned::to_owned);
     let business_ok = code.is_none_or(|value| value == 0 || value == 200)
         && text_code.is_none_or(|value| matches!(value, "OK" | "SUCCESS"));
@@ -379,6 +395,18 @@ fn parse_response<T: DeserializeOwned>(
 
 fn failure_reason(reason: Option<String>) -> String {
     reason.unwrap_or_else(|| "REQUEST_FAILED".to_string())
+}
+
+fn usage_snapshot(data: UsageData) -> Option<UsageSnapshot> {
+    if data.is_valid == Some(false) {
+        return None;
+    }
+    let quota = data.quota.as_ref();
+    let remaining = data.remaining.or_else(|| quota.and_then(|value| value.remaining))?;
+    let limit = quota.and_then(|value| value.limit).or(data.balance).unwrap_or(remaining);
+    let used = quota.and_then(|value| value.used).unwrap_or_else(|| (limit - remaining).max(0.0));
+    let unit = data.unit.or_else(|| quota.and_then(|value| value.unit.clone())).unwrap_or_else(|| "USD".to_string());
+    Some(UsageSnapshot { quota: limit, used, remaining, unit, mode: data.mode, plan_name: data.plan_name })
 }
 
 fn value_id(value: Value) -> Option<String> {
@@ -725,7 +753,7 @@ async fn get_usage(request: AccountRequest) -> UsageResult {
             }
         }
     };
-    let url = match endpoint_url(&session.base_url, "api/usage") {
+    let url = match endpoint_url(&session.base_url, "v1/usage") {
         Ok(url) => url,
         Err(()) => {
             return UsageResult {
@@ -745,9 +773,9 @@ async fn get_usage(request: AccountRequest) -> UsageResult {
     };
     let (status, body) = match send(
         client
-            .post(url)
-            .bearer_auth(&session.access_token)
-            .json(&serde_json::json!({})),
+            .get(url)
+            .bearer_auth(&session.api_key)
+            .header(reqwest::header::ACCEPT, "application/json"),
     )
     .await
     {
@@ -766,14 +794,10 @@ async fn get_usage(request: AccountRequest) -> UsageResult {
             usage: None,
         };
     }
-    match data {
-        Some(data) => UsageResult {
+    match data.and_then(usage_snapshot) {
+        Some(usage) => UsageResult {
             service: ServiceResult::success(status, code),
-            usage: Some(UsageSnapshot {
-                quota: data.quota.unwrap_or(0.0),
-                used: data.quota_used.unwrap_or(0.0),
-                requests: data.refresh_count.unwrap_or(0),
-            }),
+            usage: Some(usage),
         },
         None => UsageResult {
             service: ServiceResult::failure(status, code, "INVALID_RESPONSE"),
@@ -1028,7 +1052,7 @@ fn delete_customer_session(app: tauri::AppHandle, request: AccountRequest) -> Re
 #[cfg(test)]
 mod tests {
     use super::{
-        activation_url, endpoint_url, parse_response, same_account, ActivationCredentials,
+        activation_url, endpoint_url, parse_response, same_account, usage_snapshot, ActivationCredentials,
         ActivationEnvelope, ApiKeysData, CustomerGroup, CustomerSession, SwitchApiKeyGroupData,
         UsageData, UsageDetailsData,
     };
@@ -1044,13 +1068,33 @@ mod tests {
     }
 
     #[test]
-    fn parses_usage_response() {
-        let response =
-            r#"{"code":0,"message":"ok","data":{"quota":1000,"quota_used":250,"refresh_count":3}}"#;
+    fn parses_wallet_usage_response() {
+        let response = r#"{"mode":"unrestricted","isValid":true,"planName":"钱包余额","balance":20,"remaining":20,"unit":"USD"}"#;
         let (code, _, data, ok) = parse_response::<UsageData>(response);
-        assert_eq!(code, Some(0));
-        assert_eq!(data.unwrap().quota_used, Some(250.0));
+        let usage = usage_snapshot(data.unwrap()).unwrap();
+        assert_eq!(code, None);
+        assert_eq!(usage.remaining, 20.0);
+        assert_eq!(usage.used, 0.0);
+        assert_eq!(usage.unit, "USD");
         assert!(ok);
+    }
+
+    #[test]
+    fn parses_api_key_quota_usage_response() {
+        let response = r#"{"mode":"quota_limited","isValid":true,"remaining":8.5,"unit":"USD","quota":{"limit":10,"used":1.5,"remaining":8.5,"unit":"USD"}}"#;
+        let (_, _, data, ok) = parse_response::<UsageData>(response);
+        let usage = usage_snapshot(data.unwrap()).unwrap();
+        assert_eq!(usage.quota, 10.0);
+        assert_eq!(usage.used, 1.5);
+        assert_eq!(usage.remaining, 8.5);
+        assert!(ok);
+    }
+
+    #[test]
+    fn parses_usage_authentication_error() {
+        let response = r#"{"error":{"type":"authentication_error","message":"Invalid API key"}}"#;
+        let (_, reason, _, _) = parse_response::<UsageData>(response);
+        assert_eq!(reason.as_deref(), Some("Invalid API key"));
     }
 
     #[test]
@@ -1120,10 +1164,10 @@ mod tests {
             "http://8.136.139.105:8080/api/v1/customer/activate"
         );
         assert_eq!(
-            endpoint_url("http://8.136.139.105:8080", "api/usage")
+            endpoint_url("http://8.136.139.105:8080", "v1/usage")
                 .unwrap()
                 .as_str(),
-            "http://8.136.139.105:8080/api/usage"
+            "http://8.136.139.105:8080/v1/usage"
         );
     }
 

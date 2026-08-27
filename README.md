@@ -23,7 +23,7 @@ npm run tauri build
 
 重复添加时，客户端使用浏览器原生 SHA-256 保存设备相关的卡密指纹，并由原生层在内存中再次比较新旧 Access Token/API Key；两层任一判断为同一账号都会拒绝新增，不会保存或返回原始卡密。
 
-当前已接入：`POST /api/usage`、`POST /api/usage/details`、`GET /api/notifications`、`POST /api/notifications/read`。Codex 模型地址由管理服务地址追加 `/v1` 派生，Provider 为 `sub2api`，默认模型为 `gpt-5.5`。
+当前已接入：`GET /v1/usage`（使用 API Key）、`POST /api/usage/details`、`GET /api/notifications`、`POST /api/notifications/read`（后三者使用客户会话 Access Token）。Codex 模型地址由管理服务地址追加 `/v1` 派生，Provider 为 `sub2api`；客户端账号配置区不展示默认模型字段。
 
 ## Codex 一键配置
 
