@@ -169,6 +169,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .modal-confirm.is-restore:hover { background: #c93026; }
 @keyframes modal-fade-in { from { opacity: 0; } }
 @keyframes modal-rise-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+.product-tour { position: fixed; z-index: 200; inset: 0; overflow: hidden; pointer-events: auto; }
+.tour-mask { position: absolute; inset: 0; }
+.tour-highlight { position: absolute; border: 2px solid var(--accent); border-radius: 16px; box-shadow: 0 0 0 3px #f2efe6, 0 8px 30px #1c1b1852; pointer-events: none; transition: top .16s ease, left .16s ease, width .16s ease, height .16s ease; }
+.tour-card { position: absolute; max-height: calc(100dvh - 24px); padding: 19px 20px 17px; overflow-y: auto; border: 1px solid var(--ink); border-top: 5px solid var(--accent); border-radius: 16px; background: var(--surface); box-shadow: 0 22px 60px #1c1b186b; outline: none; animation: modal-rise-in .18s ease-out; transform: translateY(0); }
+.tour-card.is-above { transform: translateY(-100%); }
+.tour-progress { display: flex; align-items: center; justify-content: space-between; color: var(--accent); font-family: "Cascadia Code", Consolas, monospace; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.tour-progress strong { min-width: 42px; padding: 4px 7px; border-radius: 8px; color: var(--paper); background: var(--ink); font-size: 9px; text-align: center; letter-spacing: .04em; }
+.tour-card h2 { margin: 12px 0 7px; font-size: 19px; letter-spacing: -.02em; }
+.tour-card > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 19px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.tour-actions > div { display: flex; gap: 7px; }
+.tour-actions button { min-height: 36px; padding: 0 13px; border: 1px solid var(--ink); border-radius: 10px; color: var(--ink); background: transparent; font-size: 11px; font-weight: 800; }
+.tour-actions button:hover:not(:disabled) { color: var(--paper); background: var(--ink); }
+.tour-actions button:disabled { cursor: default; opacity: .35; }
+.tour-actions .tour-skip { padding-right: 4px; padding-left: 4px; border-color: transparent; color: var(--muted); }
+.tour-actions .tour-skip:hover { color: var(--accent); background: transparent; }
+.tour-actions .tour-next { border-color: var(--ink); color: var(--paper); background: var(--ink); }
+.tour-actions .tour-next:hover { border-color: var(--accent); background: var(--accent); }
 .usage-disclosure { margin-top: 14px; overflow: hidden; }.usage-toggle { width: 100%; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 13px; padding: 15px 16px; border: 0; color: var(--ink); background: transparent; text-align: left; }.usage-toggle-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--paper); background: var(--accent); }.usage-toggle strong { font-size: 13px; letter-spacing: .02em; }.chevron { color: var(--accent); transition: transform .18s ease; }.usage-disclosure.is-open .chevron { transform: rotate(180deg); }.usage-content { max-height: 336px; padding: 0 16px 15px; overflow-y: auto; border-top: 1px solid var(--rule); }.usage-row { min-height: 64px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 15px 0; border-bottom: 1px solid var(--rule); }.usage-row:last-child { border-bottom: 0; }.usage-row strong { display: block; font-size: 12px; }.usage-row > span { color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; font-size: 10px; line-height: 1.6; text-align: right; }
 .empty { padding: 30px 10px 14px; color: var(--muted); font-size: 12px; text-align: center; }
 .network-details { margin-top: 14px; overflow: hidden; }.network-details summary { display: flex; align-items: center; justify-content: space-between; padding: 16px; cursor: pointer; list-style: none; }.network-details summary::-webkit-details-marker { display: none; }.network-details summary span { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 800; }.network-details summary span svg { color: var(--accent); }.network-details[open] summary > svg { transform: rotate(180deg); }.network-details dl { margin: 0; padding: 0 16px 12px; border-top: 1px solid var(--rule); }.network-details dl div { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--rule); }.network-details dl div:last-child { border-bottom: 0; }.network-details dt { color: var(--muted); font-size: 10px; }.network-details dd { margin: 0; font-family: "Cascadia Code", Consolas, monospace; font-size: 11px; }
@@ -182,6 +200,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .confirmation-modal { padding: 24px 20px 20px; border-radius: 17px; }
   .modal-actions { grid-template-columns: 1fr; }
   .modal-cancel { order: 2; }
+  .tour-card { padding: 17px 16px 15px; border-radius: 14px; }
+  .tour-actions { align-items: stretch; }
+  .tour-actions > div { flex: 1; justify-content: flex-end; }
+  .tour-actions button { padding-right: 10px; padding-left: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
