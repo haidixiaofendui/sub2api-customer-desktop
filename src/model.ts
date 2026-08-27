@@ -15,7 +15,7 @@ export type Account = {
   status: '可用' | '受限'
   relayUrl: string
   expiresAt?: string
-  usage: { quota: number; used: number; remaining?: number; unit?: string; mode?: string; planName?: string; updatedAt: string }
+  usage: { quota: number; used: number; remaining?: number; hasQuota?: boolean; unit?: string; mode?: string; planName?: string; updatedAt: string }
   details: UsageDetail[]
   trace: { ip: string; location: string; tls: string }
 }

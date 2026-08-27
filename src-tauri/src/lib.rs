@@ -111,6 +111,7 @@ struct UsageSnapshot {
     quota: f64,
     used: f64,
     remaining: f64,
+    has_quota: bool,
     unit: String,
     mode: Option<String>,
     plan_name: Option<String>,
@@ -403,10 +404,11 @@ fn usage_snapshot(data: UsageData) -> Option<UsageSnapshot> {
     }
     let quota = data.quota.as_ref();
     let remaining = data.remaining.or_else(|| quota.and_then(|value| value.remaining))?;
-    let limit = quota.and_then(|value| value.limit).or(data.balance).unwrap_or(remaining);
+    let quota_limit = quota.and_then(|value| value.limit);
+    let limit = quota_limit.or(data.balance).unwrap_or(remaining);
     let used = quota.and_then(|value| value.used).unwrap_or_else(|| (limit - remaining).max(0.0));
     let unit = data.unit.or_else(|| quota.and_then(|value| value.unit.clone())).unwrap_or_else(|| "USD".to_string());
-    Some(UsageSnapshot { quota: limit, used, remaining, unit, mode: data.mode, plan_name: data.plan_name })
+    Some(UsageSnapshot { quota: limit, used, remaining, has_quota: quota_limit.is_some(), unit, mode: data.mode, plan_name: data.plan_name })
 }
 
 fn value_id(value: Value) -> Option<String> {
@@ -1075,6 +1077,7 @@ mod tests {
         assert_eq!(code, None);
         assert_eq!(usage.remaining, 20.0);
         assert_eq!(usage.used, 0.0);
+        assert!(!usage.has_quota);
         assert_eq!(usage.unit, "USD");
         assert!(ok);
     }
@@ -1087,6 +1090,7 @@ mod tests {
         assert_eq!(usage.quota, 10.0);
         assert_eq!(usage.used, 1.5);
         assert_eq!(usage.remaining, 8.5);
+        assert!(usage.has_quota);
         assert!(ok);
     }
 

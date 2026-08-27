@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 type ActivationResult = { success: boolean; status: number; code?: number; reason?: string; retryAfter?: number; expiresAt?: string }
 type ServiceResult = { success: boolean; status: number; code?: number; reason?: string }
-type UsageResult = ServiceResult & { usage?: { quota: number; used: number; remaining: number; unit: string; mode?: string; planName?: string } }
+type UsageResult = ServiceResult & { usage?: { quota: number; used: number; remaining: number; hasQuota: boolean; unit: string; mode?: string; planName?: string } }
 type UsageDetailsResult = ServiceResult & { items?: RemoteUsageDetail[] }
 type NotificationsResult = ServiceResult & { items?: RemoteNotification[] }
 type ApiKeyResult = ServiceResult & { apiKey?: CustomerApiKey }
