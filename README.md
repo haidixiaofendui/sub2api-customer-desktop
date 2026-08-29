@@ -25,6 +25,10 @@ npm run tauri build
 
 当前已接入：`GET /v1/usage`（使用 API Key）、`POST /api/usage/details`、`GET /api/notifications`、`POST /api/notifications/read`（后三者使用客户会话 Access Token）。Codex 模型地址由管理服务地址追加 `/v1` 派生，Provider 为 `sub2api`；客户端账号配置区不展示默认模型字段。
 
+## 发布
+
+推送到 `main` 后，GitHub Actions 会自动构建 Windows NSIS 安装包并覆盖 `nightly` 预发布版。推送 `v*` 标签（例如 `v0.2.0`）会创建对应的正式 Release；标签版本应与 `package.json`、`src-tauri/tauri.conf.json` 和 `src-tauri/Cargo.toml` 中的版本保持一致。
+
 ## Codex 一键配置
 
 “一键修改”会定位 `CODEX_HOME`，未设置时使用当前用户目录下的 `.codex`，并执行以下操作：
